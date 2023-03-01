@@ -7,6 +7,7 @@ external use.
 
 - `update_metadata.py`: updates metadata files or initialized a new repo with metadata files
 - `update_workflow.py`: updates templated workflow files
+- `auto-git.py`: automate init, clone and normalization of git repositories
 
 ### update_metadata.py
 
@@ -20,6 +21,20 @@ Whenever you want to update a Snakemake workflow with the latest version of the 
 The script updates all Snakemake template workflow files except for `/workflow/rules/00_modules.smk` and `/workflow/rules/99_aggregate.smk`,
 which are assumed to contain workflow-specific modifications, i.e. module includes and result file aggregations. The script updates the template
 workflow files by checking for SHA checksum differences relative to the source repository [template-snakemake](https://github.com/core-unit-bioinformatics/template-snakemake).
+
+### auto-git.py
+
+Use this script to initialize or clone new repositories with one or more push targets. Additionally,
+you can normalize existing repositories, e.g., to configure two push targets. For proper operation,
+this script accesses so-called 'identity files' that are by default located in `$HOME/.cubi-tools`. For
+each remote (i.e., usually `github` and `githhu`), one file is expected (i.e., `github.id` and `githhu.id`),
+containing only two lines:
+
+```
+your-name
+your-email
+```
+
 
 # Citation
 
