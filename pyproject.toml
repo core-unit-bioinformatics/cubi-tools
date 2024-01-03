@@ -7,8 +7,8 @@ name = "update_workflow.py"
 version = "0.0.1"
 
 [cubi.metadata]
-pid = "https://github.com/core-unit-bioinformatics/template-metadata-files"
-version = "1.4.0"
+pid = "https://github.com/core-unit-bioinformatics/template-snakemake"
+version = "1.2.0"
 
 [tool.black]
 line-length = 88
