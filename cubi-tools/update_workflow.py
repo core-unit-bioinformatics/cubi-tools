@@ -40,7 +40,7 @@ def main():
     # is on the same level as the project directory
     template_dir = pathlib.Path(
         pathlib.Path(f"{project_dir}").resolve().parents[0],
-        f"template_snakemake/{source}",
+        f"update_workflow_temp/{source}",
     ).resolve()
 
     # detect if workflow is based on CUBI's template_snakemake repo
@@ -74,7 +74,7 @@ def main():
     # Updating routine of the metadata files
     for f in files_to_update:
         if f == "pyproject.toml":
-            update_pyproject_toml(project_dir, template_dir, source, dryrun, metadata)
+            update_pyproject_toml(project_dir, template_dir, source, dryrun)
         else:
             print(
                 f"Comparing if local '{f}' differs from version in branch/version tag "
@@ -85,12 +85,12 @@ def main():
     # detect if metafiles temp folder should be kept
     if keep:
         print(
-            f"\nYou want to keep the files of the branch/version tag '{source}' of the 'template-snakemake' folder.\n"
+            f"\nYou want to keep the files of the branch/version tag '{source}' of the 'update_workflow_temp' folder.\n"
             f"It's located at '{template_dir}'"
         )
     else:
         rm_temp(template_dir.parent, dryrun)
-        # print("\nThe 'template_metadata_files' folder with all files and subfolders has been deleted!")
+        # print("\nThe 'update_workflow_temp' folder with all files and subfolders has been deleted!")
 
     print("\nUPDATE COMPLETED!")
 
@@ -285,7 +285,7 @@ def update_file(f, project_dir, template_dir, dryrun):
         return None
 
 
-def update_pyproject_toml(project_dir, template_dir, source, dryrun, metadata):
+def update_pyproject_toml(project_dir, template_dir, source, dryrun):
     """
     The 'pyproject.toml' is treated a little bit differently. First, there is a check if
     the file even exists in the project directory. If that is not the case it will be copied
@@ -299,11 +299,8 @@ def update_pyproject_toml(project_dir, template_dir, source, dryrun, metadata):
     if dryrun:
         print(f"Dry run! '{x}' added or updated!")
     else:
-        if metadata:
-            update_pyproject_toml_workflow(project_dir, template_dir, source)
-            update_pyproject_toml_metadata(project_dir, template_dir, source)
-        else:
-            update_pyproject_toml_workflow(project_dir, template_dir, source)
+        update_pyproject_toml_workflow(project_dir, template_dir, source)
+        update_pyproject_toml_metadata(project_dir, template_dir, source)
     return None
 
 
