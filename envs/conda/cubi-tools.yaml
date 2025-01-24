@@ -1,0 +1,13 @@
+name: cubi-tools
+dependencies:
+  - Python=3.11.*
+  - pip
+  - pipreqs=0.4.*
+  - pyyaml=6.0.*
+  - toml=0.10.*
+  - semver=3.0.*
+  - pylint=3.3.*
+  - isort=5.13.*
+  - black=24.10.*
+  - requests=2.32.*
+  - beautifulsoup4=4.12.*
