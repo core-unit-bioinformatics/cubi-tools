@@ -1,0 +1,720 @@
+#!/usr/bin/env python3
+
+import argparse as argp
+import collections as col
+import hashlib
+import pathlib
+import shutil
+import subprocess as sp
+import sys
+import urllib
+import urllib.parse
+
+import semver
+import toml
+
+__prog__ = "update-metadata.py"
+# TODO
+# version reporting must be harmonized
+# across all CUBI tools and encapsulated
+# in a shared base library.
+# > here: function call is deferred to ArgumentParser
+__version__ = None
+
+DEFAULT_REF_REPO = "https://github.com/core-unit-bioinformatics/template-metadata-files.git"
+DEFAULT_NEW_BRANCH_NAME = "feat-update-metadata"
+
+# this list includes gitignore
+# and fixes gh#cubi-tools#53
+METADATA_FILES = [
+    ".gitignore",
+    "CITATION.md",
+    "LICENSE",
+    ".editorconfig"
+]
+
+
+def parse_command_line():
+
+    parser = argp.ArgumentParser(
+        prog=__prog__,
+        description="Add or update metadata files for your CUBI repository.",
+        usage=f"{__prog__} --target-dir path/to/repo"
+    )
+
+    parser.add_argument(
+        "--target-dir", "-t",
+        "--update-dir", "-u",
+        "--working-dir", "-w",
+        type=lambda x: pathlib.Path(x).resolve(strict=True),
+        dest="target_dirs",
+        nargs="+",
+        help=(
+            "Path to the CUBI repository where the metadata should be updated. "
+            "This repository is the target of the update operation. "
+            "Note that you can also specify a space-separated list of "
+            "repository paths that will all be updated to the same "
+            "metadata version."
+        ),
+        required=True
+    )
+
+    parser.add_argument(
+        "--template-metadata-repository",
+        "--reference-repository",
+        "--metadata-source",
+        "--ref-repo", "-r", "-md",
+        type=str,
+        dest="metadata_source",
+        default=DEFAULT_REF_REPO,
+        help=(
+            "Reference repository used as template for the metadata files. "
+            "This repository is the source of the update operation. "
+            f"Default: {DEFAULT_REF_REPO}"
+        )
+    )
+
+    parser.add_argument(
+        "--external-target",
+        "--forked-target",
+        "--external",
+        "-e", "-ext", "-fork",
+        action="store_true",
+        default=False,
+        dest="external",
+        help=(
+            "If set, metadata files are copied into the subfolder 'cubi' "
+            "underneath the top-level path of the target repository. Default: False "
+            "(Must only be set for external/forked repositories!)"
+        )
+    )
+
+    parser.add_argument(
+        "--git-branch", "--git-tag",
+        "-branch", "-tag",
+        type=str,
+        default="main",
+        dest="branch_or_tag",
+        help=(
+            "Branch or tag of the metadata source to update the files "
+            "in the target. Default: main"
+        )
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        "--dryrun",
+        "-d", "-dry",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help=(
+            "Operate in dry run mode, i.e. just report actions "
+            "but do not execute them. Default: False"
+        )
+    )
+
+    parser.add_argument(
+        "--create-new-branch",
+        "--new-branch",
+        "-c", "-n",
+        action="store_true",
+        default=False,
+        dest="new_branch",
+        help=(
+            "If set, create a new branch in the target before updating files. "
+            f"The new branch will be named '{DEFAULT_NEW_BRANCH_NAME}'. "
+            "Default: False"
+        )
+    )
+
+    parser.add_argument(
+        "--report-skipped",
+        action="store_true",
+        default=False,
+        dest="report_skipped",
+        help="If set, also report skipped (not updated) files. Default: False"
+    )
+
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=False,
+        dest="offline",
+        help="Work offline and skip operations accordingly. Default: False"
+    )
+
+    parser.add_argument(
+        "--version", "-v",
+        action="version",
+        version=report_script_version(),
+        help="Displays version of this script.",
+    )
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit(status=2)
+    args = parser.parse_args()
+    return args
+
+
+def check_online_resource(uri):
+
+    url_parser = urllib.parse.urlparse
+    result = url_parser(uri)
+    # No support for http - yes [!?]
+    return result.scheme == "https"
+
+
+def determine_local_metadata_source_path(metadata_source_path, target_parent_dir):
+
+    try:
+        local_metadata_path = pathlib.Path(metadata_source_path).resolve(strict=True)
+    except FileNotFoundError:
+        # check if the path is an online source / URL
+        if not check_online_resource(metadata_source_path):
+            err_msg = (
+                "\n\nERROR\n\n"
+                "You specified a path for the metadata source repository that is "
+                "neither a local folder nor seems to be an online resource "
+                "(note: an online resource must start with https://).\n"
+                "Cannot proceed from here - aborting.\n"
+                f"\nInvalid metadata source: {metadata_source_path}\n"
+            )
+            sys.stderr.write(err_msg)
+            raise  # raises again FileNotFoundError
+
+        # now we know that it is an online resource;
+        # it may nevertheless exist locally.
+        local_metadata_path = target_parent_dir.joinpath(
+            pathlib.Path(metadata_source_path).stem
+        ).resolve()
+
+    return local_metadata_path
+
+
+def determine_target_repo_type(target_dir):
+    """Determine type of repository based on
+    its name: workflow, project or cubi-tools
+    itself are supported at the moment.
+    TODO
+    - use enums
+    - read info from metadata repository
+    """
+
+    if target_dir.name.startswith("workflow-"):
+        target_type = "workflow"
+    elif target_dir.name.startswith("project-"):
+        target_type = "project"
+    elif target_dir.name == "cubi-tools":
+        target_type = "tools"
+    else:
+        raise ValueError(
+            f"Cannot determine repository type: {target_dir}"
+        )
+    return target_type
+
+
+def md5_checksum(file_path):
+    """
+    Compute the MD5 checksum for a file.
+    Args:
+        file_path (pathlib.Path): path to file
+    Returns:
+        md5_hash: MD5 checksum of metadata file
+    """
+    with open(file_path, "rb") as some_file:
+        content = some_file.read()
+        md5_hash = hashlib.md5(content).hexdigest()
+    return md5_hash
+
+
+def file_hash_is_identical(file_a, file_b):
+    return md5_checksum(file_a) == md5_checksum(file_b)
+
+
+def check_file_identity(filename, metadata_path, target_path):
+
+    source_version = metadata_path.joinpath(filename).resolve(strict=True)
+    target_version = target_path.joinpath(filename).resolve()
+
+    target_file_exists = target_version.is_file()
+
+    file_is_identical = target_file_exists and file_hash_is_identical(
+        source_version, target_version
+    )
+
+    if file_is_identical:
+        reason = None
+    elif target_file_exists:
+        reason = "MD5 mismatch"
+    else:
+        reason = "Non-existent target"
+
+    return file_is_identical, reason
+
+
+def update_existing_pyproject(source_pyproject, target_pyproject, dry_run, report_skipped):
+    """Load both pyprojects
+    source -> from metadata reference repository / template
+    target -> from target repository
+    """
+
+    source_content = load_toml_file(source_pyproject)
+    target_content = load_toml_file(target_pyproject)
+
+    file_updated = False
+
+    operations = []
+    modifying_ops = 0
+    for key, source_value in source_content["cubi"]["metadata"].items():
+        if isinstance(source_value, col.OrderedDict):
+            # sub-structures are specific to the metadata
+            # repository and nomenclature
+            continue
+        try:
+            target_value = target_content["cubi"]["metadata"][key]
+            if target_value == source_value:
+                operations.append(("skip", key, target_value, "<identical>"))
+            else:
+                target_content["cubi"]["metadata"][key] = source_value
+                operations.append(("update", key, target_value, source_value))
+                modifying_ops += 1
+        except KeyError:
+            operations.append(("new", key, "<missing>", source_value))
+            target_content["cubi"]["metadata"][key] = source_value
+            modifying_ops += 1
+
+    summary_info = "pyproject.toml\nsection: cubi.metadata\nupdate operations:\n"
+    for op, key, old, new in operations:
+        summary_info += f"{op} {key}: {old} -> {new}\n"
+
+    if modifying_ops > 0:
+        if dry_run:
+            info_msg = "\n=== DRY RUN INFO ===\n" + summary_info
+            sys.stdout.write(info_msg)
+        else:
+            info_msg = "\n\n=== Request approval for update ===\n" + summary_info
+            sys.stdout.write(info_msg)
+            question = (
+                f"\nUpdate keys/values in {target_pyproject}\n"
+                "---> Execute?"
+            )
+            if get_user_approval(question):
+                with open(target_pyproject, "w") as pyproject:
+                    toml.dump(target_content, pyproject)
+                file_updated = True
+
+    elif report_skipped:
+        sys.stdout.write("\n\n" + summary_info)
+    else:
+        # silence, nothing to update
+        pass
+
+    return file_updated
+
+
+def assemble_new_pyproject(local_metadata_source, target_dir, target_type, dry_run):
+    """Target does not contain a pyproject.toml to update,
+    so create a new one containing keys specific to the type
+    of the target repository.
+    This function adresses gh#template-metadata-files#12
+    """
+
+    md_toml = local_metadata_source.joinpath("pyproject.toml").resolve(strict=True)
+    fmt_toml = local_metadata_source.joinpath(
+        "tomls", "formatting", "pyproject.toml"
+    ).resolve(strict=True)
+    type_toml = local_metadata_source.joinpath(
+        "tomls", target_type, "pyproject.toml"
+    ).resolve(strict=True)
+
+    labeled_tomls = [
+        (md_toml, "metadata"),
+        (type_toml, target_type),
+        (fmt_toml, None)
+    ]
+
+    file_created = False
+
+    target_toml = col.OrderedDict()
+    for toml_file, toml_label in labeled_tomls:
+        content = load_toml_file(toml_file)
+        if toml_label is None:
+            target_toml.update(content)
+        else:
+            for key, value in content["cubi"][toml_label]:
+                if isinstance(value, col.OrderedDict):
+                    continue
+                target_toml[key] = value
+
+    target_pyproject = target_dir.joinpath("pyproject.toml").resolve()
+    if dry_run:
+        info_msg = (
+            "\n=== DRY RUN INFO ===\n"
+            "Creating NEW pyproject.toml "
+            f"for repository of type '{target_type}'.\n"
+            f"New file location: {target_pyproject}"
+        )
+        sys.stdout.write(info_msg)
+    else:
+        question = (
+            "\n\n=== Request approval for update ===\n"
+            "Creating NEW pyproject.toml "
+            f"for repository of type '{target_type}'.\n"
+            f"New file location: {target_pyproject}"
+            "--> Execute?"
+        )
+        if get_user_approval(question):
+            with open(target_pyproject, "w") as pyproject:
+                toml.dump(target_toml, pyproject)
+            file_created = True
+    return file_created
+
+
+def print_dry_run_info(system_call, work_folder=None):
+
+    if isinstance(system_call, list):
+        cmd = " ".join(map(str, system_call))
+    else:
+        cmd = system_call
+    assert isinstance(cmd, str)
+
+    if work_folder is None:
+        wd = pathlib.Path(".").resolve()
+    else:
+        wd = work_folder
+
+    info_msg = (
+        "\n=== DRY RUN INFO ===\n"
+        "Would execute command:\n"
+        f"> {cmd}\n"
+        f"In folder: {wd}\n"
+    )
+    print(info_msg)
+
+    return
+
+
+def exec_system_call(call, workfolder=None, fail_on_error=True, return_stdout=False):
+
+    try:
+        process_return = sp.run(
+            call, cwd=workfolder, check=True,
+            stdout=sp.PIPE, stderr=sp.PIPE
+        )
+    except sp.CalledProcessError:
+        if fail_on_error:
+            raise
+    if return_stdout:
+        if process_return.stdout is None:
+            value = None
+        else:
+            value = process_return.stdout.decode("utf-8").strip()
+    else:
+        value = None
+    return value
+
+
+def git_assert_minimal_version(version="2.23.0"):
+    """This script uses the git switch command
+    that was introduced in v2.23
+    """
+    git_cmd = ["git", "--version"]
+    out = exec_system_call(git_cmd, return_stdout=True)
+    out = out.split()[-1]
+    git_version_machine = semver.parse_version_info(out)
+    git_version_minimal = semver.parse_version_info(version)
+    major_ok = git_version_machine.major >= git_version_minimal.major
+    minor_ok = git_version_machine.minor >= git_version_minimal.minor
+    if not (major_ok and minor_ok):
+        raise RuntimeError(
+            f"This CUBI tool requires git version {version}+\n"
+            f"Git on your system: {out}"
+        )
+    return
+
+
+def git_clone(metadata_source, local_metadata_path, dry_run):
+
+    local_base_path = local_metadata_path.parent
+    git_cmd = ["git", "clone", metadata_source]
+    if dry_run:
+        print_dry_run_info(git_cmd, local_base_path)
+    else:
+        print(f"Cloning metadata resource {metadata_source} to {local_base_path}")
+        exec_system_call(git_cmd, local_base_path)
+        assert local_metadata_path.is_dir()
+    return
+
+
+def git_update(local_metadata_path, dry_run):
+    git_cmd = ["git", "pull", "--all"]
+    if dry_run:
+        print_dry_run_info(git_cmd, local_metadata_path)
+    else:
+        print(f"Updating local metadata resource at: {local_metadata_path}")
+        exec_system_call(git_cmd, local_metadata_path)
+    return
+
+
+def git_checkout(local_metadata_path, branch_or_tag, dry_run):
+
+    git_cmd = ["git", "checkout", branch_or_tag]
+    if dry_run:
+        print_dry_run_info(git_cmd, local_metadata_path)
+    else:
+        print(f"Checking out branch/tag {branch_or_tag} in metadata resource: {local_metadata_path}")
+        exec_system_call(git_cmd, local_metadata_path)
+    return
+
+
+def git_new_branch(local_target_path, dry_run):
+
+    new_branch_name = DEFAULT_NEW_BRANCH_NAME
+    git_cmd = ["git", "switch", "-c", new_branch_name]
+    if dry_run:
+        print_dry_run_info(git_cmd, local_target_path)
+    else:
+        print(f"Creating new branch '{new_branch_name}' in metadata resource {local_target_path}")
+        try:
+            exec_system_call(git_cmd, local_target_path)
+        except sp.CalledProcessError as perr:
+            # could mean that branch already exists
+            warn_msg = (
+                f"\nWARNING: new branch {new_branch_name} may already "
+                f"exist in repository {local_target_path}.\n"
+                "Verifying...\n"
+            )
+            sys.stderr.write(warn_msg)
+            check_branch = ["git", "branch", "-a"]
+
+            out = exec_system_call(check_branch, workfolder=local_target_path, return_stdout=True)
+            out = out.strip().split()
+            branch_exists = False
+            for branch in out:
+                if new_branch_name in branch:
+                    branch_exists = True
+                    break
+            if not branch_exists:
+                sys.stderr.write("\nVerify operation failed...\n")
+                raise perr
+            else:
+                sys.stderr.write(
+                    "WARNING: branch already exists\nProceeding with update operation...\n"
+                )
+    return
+
+
+def git_reset(local_metadata_path, dry_run, branch="main"):
+
+    git_cmd = ["git", "checkout", branch]
+    if dry_run:
+        print_dry_run_info(git_cmd, local_metadata_path)
+    else:
+        print(f"Resetting to branch '{branch}' in metadata resource: {local_metadata_path}")
+        exec_system_call(git_cmd, local_metadata_path)
+    return
+
+
+def update_file(file_name, local_metadata_path, target_path, dry_run):
+
+    files_identical, reason = check_file_identity(
+        file_name, local_metadata_path, target_path
+    )
+    file_updated = False
+    if not files_identical:
+        md_source_file = local_metadata_path.joinpath(file_name)
+        cmd = ["cp", md_source_file, target_path]
+        if dry_run:
+            cmd.insert(0, "[pending user approval]")
+            print_dry_run_info(cmd)
+        else:
+            question = (
+                "\n\n=== Request approval for update ===\n"
+                f"Update from: {md_source_file}\n"
+                f"Update to: {target_path}/\n"
+                f"Reason: {reason}\n"
+                "--> Execute?"
+            )
+            if get_user_approval(question):
+                exec_system_call(cmd)
+                file_updated = True
+    return file_updated
+
+
+def get_user_approval(question, attempt=0):
+    """
+    Function to evaluate the user response to the Yes or No question refarding updating
+    the metadata files.
+    """
+    attempt += 1
+    prompt = f"{question} (y/n): "
+    answer = input(prompt).strip().lower()
+    pos = ["yes", "y", "yay", "1"]
+    neg = ["no", "n", "nay", "0"]
+    if attempt == 2:
+        print("You have one last chance to answer this yes/no (y/n) question")
+    if attempt >= 3:
+        raise RuntimeError(
+            "You failed 3 times to answer a simple yes/no "
+            "(y/n) question --- aborting update..."
+        )
+    if not (answer in pos or answer in neg):
+        print(f"That was a [y]es or [n]o question, but you answered: {answer}")
+        return get_user_approval(question, attempt)
+    return answer in pos
+
+
+def load_toml_file(file_path):
+    """The OrderedDict as mapping class
+    is important to preserve the key order
+    when writing the file back to the git
+    repo path.
+    """
+    content = toml.load(file_path, _dict=col.OrderedDict)
+    return content
+
+
+def find_cubi_tools_top_level():
+    """Find the top-level folder of the cubi-tools
+    repository (starting from this script path).
+    """
+    script_path = pathlib.Path(__file__).resolve(strict=True)
+    script_folder = script_path.parent
+
+    git_cmd = ["git", "rev-parse", "--show-toplevel"]
+    repo_path = exec_system_call(git_cmd, script_folder, return_stdout=True)
+    repo_path = pathlib.Path(repo_path)
+    return repo_path
+
+
+def report_script_version():
+    """
+    Read out of the cubi-tools script version out of the 'pyproject.toml'.
+    """
+    cubi_tools_repo = find_cubi_tools_top_level()
+
+    toml_file = cubi_tools_repo.joinpath("pyproject.toml").resolve(strict=True)
+
+    toml_file = toml.load(toml_file, _dict=dict)
+    cubi_tools_scripts = toml_file["cubi"]["tools"]["script"]
+    version = None
+    for cubi_tool in cubi_tools_scripts:
+        if cubi_tool["name"] == __prog__:
+            version = cubi_tool["version"]
+    if version is None:
+        raise RuntimeError(
+            f"Cannot identify script version from pyproject cubi-tools::scripts entry: {cubi_tools_scripts}"
+        )
+    return version
+
+
+def prepare_local_metadata_resource(metadata_source, target_dir, branch_or_tag, dry_run, offline):
+
+    local_metadata_path = determine_local_metadata_source_path(
+        metadata_source, target_dir.parent
+    )
+    if local_metadata_path.is_dir():
+        if not offline:
+            git_reset(local_metadata_path, dry_run)
+            git_update(local_metadata_path, dry_run)
+    else:
+        if offline:
+            raise RuntimeError(
+                "Offline mode set but no local metadata source available."
+            )
+        git_clone(args.metadata_source, local_metadata_path, dry_run)
+
+    git_checkout(local_metadata_path, branch_or_tag, dry_run)
+
+    return local_metadata_path
+
+
+def main():
+
+    args = parse_command_line()
+    dry_run = args.dry_run
+
+    git_assert_minimal_version()
+
+    if dry_run:
+        print("\n=== INFO: this is a dry run | no changes will be made ===\n")
+
+    target_dirs = args.target_dirs
+    assert isinstance(target_dirs, list)
+    if len(target_dirs) > 1:
+        info_msg = (
+            f"Specified {len(target_dirs)} target directories for update operation.\n"
+            f"First: {target_dirs[0]}\n"
+            f"Last: {target_dirs[-1]}\n"
+        )
+        print(info_msg)
+    else:
+        print(f"Target directory for the update operation: {target_dirs[0]}")
+
+    local_metadata_path = prepare_local_metadata_resource(
+        args.metadata_source, target_dirs[0],
+        args.branch_or_tag, dry_run, args.offline
+    )
+
+    for target_dir in target_dirs:
+        sys.stdout.write(f"\n\n### NEW TARGET DIRECTORY: {target_dir}\n\n")
+        if args.new_branch:
+            git_new_branch(target_dir, dry_run)
+        if args.external:
+            target_copy_path = target_dir.joinpath("cubi")
+            if not dry_run:
+                target_copy_path.mkdir(parents=True, exist_ok=True)
+        else:
+            target_copy_path = target_dir
+        for md_file in METADATA_FILES:
+            file_updated = update_file(
+                md_file, local_metadata_path, target_copy_path, dry_run
+            )
+            if dry_run:
+                assert not file_updated, f"Unintended update: {target_copy_path}/{md_file}"
+            if not dry_run and not file_updated and args.report_skipped:
+                print(f"File not updated: {target_copy_path}/{md_file}")
+
+        # for pyproject.toml, there are two options:
+        # 1) does not exist - must be created specific for type
+        # 2) exists; must only be updated with keys/values of the
+        # cubi metadata group
+        try:
+            target_pyproject = target_copy_path.joinpath(
+                "pyproject.toml"
+            ).resolve(strict=True)
+        except FileNotFoundError:
+            # need to assemble new toml
+            target_type = determine_target_repo_type(target_dir)
+            file_created = assemble_new_pyproject(
+                local_metadata_path, target_copy_path,
+                target_type, dry_run
+            )
+            if dry_run:
+                assert not file_created, f"Unintended file create: {target_copy_path}/pyproject.toml"
+        else:
+            # update existing toml
+            source_pyproject = local_metadata_path.joinpath(
+                "pyproject.toml"
+            ).resolve(strict=True)
+            file_updated = update_existing_pyproject(
+                source_pyproject, target_pyproject, dry_run,
+                args.report_skipped
+            )
+            if dry_run:
+                assert not file_updated, f"Unintended file update: {target_pyproject}"
+
+    sys.stdout.write("\n\n" + "-"*100 + "\n")
+    sys.stdout.write("Update process complete - resetting metadata source repository to main branch\n")
+
+    # a git update / git pull would fail if the last checked out version was referring
+    # to a tag, hence we reset here to main
+    git_reset(local_metadata_path, dry_run)
+
+    return 0
+
+
+if __name__ == "__main__":
+    main()
