@@ -288,6 +288,12 @@ def get_labeled_toml_files(local_metadata_source, target_type):
     return labeled_tomls
 
 
+def is_atomic_type(value):
+    atomic_types = [bool, str, int, float]
+    is_atomic = any(isinstance(value, at) for at in atomic_types)
+    return is_atomic
+
+
 def update_pyproject_sections(labeled_toml_files, target_content):
     """Update target pyproject content in-place.
     Overwrite values in the metadata section, but only add new
@@ -296,6 +302,9 @@ def update_pyproject_sections(labeled_toml_files, target_content):
     operations = []
     modifying_ops = 0
     processed_sections = []
+    new_pyproject = len(target_content) == 0
+    if new_pyproject:
+        target_content["cubi"] = col.OrderedDict()
     for toml_file, toml_label in labeled_toml_files:
         source_content = load_toml_file(toml_file)
         if toml_label is None:
@@ -304,11 +313,18 @@ def update_pyproject_sections(labeled_toml_files, target_content):
             target_content.update(source_content)
             processed_sections.append("tool.*")
             continue
+        elif new_pyproject:
+            target_content["cubi"][toml_label] = col.OrderedDict()
+        else:
+            pass
         section_content = source_content["cubi"][toml_label]
         for key, source_value in section_content.items():
-            if isinstance(source_value, col.OrderedDict):
-                # sub-structures are specific to the metadata
-                # repository and nomenclature
+            # for all tomls that are not the formatting toml,
+            # only create/update key-value pairs if the value
+            # is an atomic type; complex types such as lists
+            # or OrderedDicts describe repo type-specific
+            # metadata that cannot be updated by this script
+            if not is_atomic_type(source_value):
                 continue
             try:
                 target_value = target_content["cubi"][toml_label][key]
@@ -330,7 +346,7 @@ def update_pyproject_sections(labeled_toml_files, target_content):
                 # 2 - this code path is always taken for new/empty
                 # pyproject tomls; not very efficient
                 operations.append(("new", key, "<missing>", source_value))
-                target_content["cubi"]["metadata"][key] = source_value
+                target_content["cubi"][toml_label][key] = source_value
                 modifying_ops += 1
         processed_sections.append(f"cubi.{toml_label}")
 
@@ -388,7 +404,7 @@ def dump_pyproject_toml(target_pyproject, target_type, toml_content, dry_run):
             "\n\n=== Request approval for update ===\n"
             f"Writing {adjective} pyproject.toml "
             f"for repository of type '{target_type}'.\n"
-            f"{adjective.capitalize()} file location: {target_pyproject}"
+            f"{adjective.capitalize()} file location: {target_pyproject}\n"
             "--> Execute?"
         )
         if get_user_approval(question):
