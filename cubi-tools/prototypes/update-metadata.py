@@ -254,122 +254,148 @@ def check_file_identity(filename, metadata_path, target_path):
     return file_is_identical, reason
 
 
-def update_existing_pyproject(source_pyproject, target_pyproject, dry_run, report_skipped):
-    """Load both pyprojects
-    source -> from metadata reference repository / template
-    target -> from target repository
-    """
+def get_labeled_toml_files(local_metadata_source, target_type):
+    """Compile a list of relevant pyproject TOML files.
+    At the moment, only one ("type_toml") is not constant
+    and specific to the type of the repository (workflow, project etc.)
 
-    source_content = load_toml_file(source_pyproject)
-    target_content = load_toml_file(target_pyproject)
-
-    file_updated = False
-
-    operations = []
-    modifying_ops = 0
-    for key, source_value in source_content["cubi"]["metadata"].items():
-        if isinstance(source_value, col.OrderedDict):
-            # sub-structures are specific to the metadata
-            # repository and nomenclature
-            continue
-        try:
-            target_value = target_content["cubi"]["metadata"][key]
-            if target_value == source_value:
-                operations.append(("skip", key, target_value, "<identical>"))
-            else:
-                target_content["cubi"]["metadata"][key] = source_value
-                operations.append(("update", key, target_value, source_value))
-                modifying_ops += 1
-        except KeyError:
-            operations.append(("new", key, "<missing>", source_value))
-            target_content["cubi"]["metadata"][key] = source_value
-            modifying_ops += 1
-
-    summary_info = "pyproject.toml\nsection: cubi.metadata\nupdate operations:\n"
-    for op, key, old, new in operations:
-        summary_info += f"{op} {key}: {old} -> {new}\n"
-
-    if modifying_ops > 0:
-        if dry_run:
-            info_msg = "\n=== DRY RUN INFO ===\n" + summary_info
-            sys.stdout.write(info_msg)
-        else:
-            info_msg = "\n\n=== Request approval for update ===\n" + summary_info
-            sys.stdout.write(info_msg)
-            question = (
-                f"\nUpdate keys/values in {target_pyproject}\n"
-                "---> Execute?"
-            )
-            if get_user_approval(question):
-                with open(target_pyproject, "w") as pyproject:
-                    toml.dump(target_content, pyproject)
-                file_updated = True
-
-    elif report_skipped:
-        sys.stdout.write("\n\n" + summary_info)
-    else:
-        # silence, nothing to update
-        pass
-
-    return file_updated
-
-
-def assemble_new_pyproject(local_metadata_source, target_dir, target_type, dry_run):
-    """Target does not contain a pyproject.toml to update,
-    so create a new one containing keys specific to the type
-    of the target repository.
     This function adresses gh#template-metadata-files#12
     """
-
+    # the metadata TOML
     md_toml = local_metadata_source.joinpath("pyproject.toml").resolve(strict=True)
+    # the repository type-specific TOML (workflow, project etc.)
+    type_toml = local_metadata_source.joinpath(
+        "tomls", "cubi", target_type, "pyproject.toml"
+    ).resolve(strict=True)
+    # the tool/source code formatter TOML,
+    # configuring
     fmt_toml = local_metadata_source.joinpath(
         "tomls", "formatting", "pyproject.toml"
     ).resolve(strict=True)
-    type_toml = local_metadata_source.joinpath(
-        "tomls", target_type, "pyproject.toml"
-    ).resolve(strict=True)
 
+    # NB: since an OrderedDict is being used as
+    # data structure for the TOML configuration,
+    # the file order in this list defines how the individual
+    # sections appear in the output. This is important
+    # to make any meaningful check of file identity relying
+    # on the MD5 checksum
     labeled_tomls = [
         (md_toml, "metadata"),
         (type_toml, target_type),
         (fmt_toml, None)
     ]
 
-    file_created = False
+    return labeled_tomls
 
-    target_toml = col.OrderedDict()
-    for toml_file, toml_label in labeled_tomls:
-        content = load_toml_file(toml_file)
+
+def update_pyproject_sections(labeled_toml_files, target_content):
+    """Update target pyproject content in-place.
+    Overwrite values in the metadata section, but only add new
+    ones keys in all other sections.
+    """
+    operations = []
+    modifying_ops = 0
+    processed_sections = []
+    for toml_file, toml_label in labeled_toml_files:
+        source_content = load_toml_file(toml_file)
         if toml_label is None:
-            target_toml.update(content)
-        else:
-            for key, value in content["cubi"][toml_label]:
-                if isinstance(value, col.OrderedDict):
-                    continue
-                target_toml[key] = value
+            # this is the formatting pyproject toml
+            # just plain update operation is fine
+            target_content.update(source_content)
+            processed_sections.append("tool.*")
+            continue
+        section_content = source_content["cubi"][toml_label]
+        for key, source_value in section_content.items():
+            if isinstance(source_value, col.OrderedDict):
+                # sub-structures are specific to the metadata
+                # repository and nomenclature
+                continue
+            try:
+                target_value = target_content["cubi"][toml_label][key]
+                if target_value == source_value:
+                    operations.append(("skip-id", key, target_value, "<identical>"))
+                elif toml_label == "metadata":
+                    # special case: the value is different and we are in
+                    # the pyproject metadata section; here, we can just
+                    # replace the old value since it cannot be specific
+                    # to the repository we are updating.
+                    target_content["cubi"]["metadata"][key] = source_value
+                    operations.append(("update", key, target_value, source_value))
+                    modifying_ops += 1
+                else:
+                    operations.append(("skip-ex", key, target_value, source_value))
+            except KeyError:
+                # 1 - new keys can always be added; they just represent
+                # an updated/extension of the respective TOML
+                # 2 - this code path is always taken for new/empty
+                # pyproject tomls; not very efficient
+                operations.append(("new", key, "<missing>", source_value))
+                target_content["cubi"]["metadata"][key] = source_value
+                modifying_ops += 1
+        processed_sections.append(f"cubi.{toml_label}")
+
+    joined_labels = "|".join(processed_sections)
+    summary_info = f"pyproject.toml\nsections: [{joined_labels}]\nupdate operations:\n"
+    for op, key, old, new in operations:
+        summary_info += f"{op} {key}: {old} -> {new}\n"
+
+    return modifying_ops, summary_info
+
+
+def update_pyproject_toml(local_metadata_source, target_dir, target_type, dry_run, report_skipped):
+
+    labeled_tomls = get_labeled_toml_files(local_metadata_source, target_type)
 
     target_pyproject = target_dir.joinpath("pyproject.toml").resolve()
+    if target_pyproject.is_file():
+        target_content = load_toml_file(target_pyproject)
+    else:
+        target_content = col.OrderedDict()
+
+    modifying_ops, summary_info = update_pyproject_sections(labeled_tomls, target_content)
+
+    file_updated = False
+
+    if modifying_ops > 0:
+        sys.stdout.write(summary_info)
+        file_updated = dump_pyproject_toml(target_pyproject, target_type, target_content, dry_run)
+    elif report_skipped:
+        sys.stdout.write(summary_info)
+    else:
+        pass
+    return file_updated
+
+
+def dump_pyproject_toml(target_pyproject, target_type, toml_content, dry_run):
+
+    if target_pyproject.is_file():
+        adjective = "updated"
+    else:
+        adjective = "new"
+
+    file_updated = False
+
     if dry_run:
         info_msg = (
             "\n=== DRY RUN INFO ===\n"
-            "Creating NEW pyproject.toml "
+            f"Writing {adjective} pyproject.toml "
             f"for repository of type '{target_type}'.\n"
-            f"New file location: {target_pyproject}"
+            f"{adjective.capitalize()} file location: {target_pyproject}"
         )
         sys.stdout.write(info_msg)
     else:
         question = (
             "\n\n=== Request approval for update ===\n"
-            "Creating NEW pyproject.toml "
+            f"Writing {adjective} pyproject.toml "
             f"for repository of type '{target_type}'.\n"
-            f"New file location: {target_pyproject}"
+            f"{adjective.capitalize()} file location: {target_pyproject}"
             "--> Execute?"
         )
         if get_user_approval(question):
             with open(target_pyproject, "w") as pyproject:
-                toml.dump(target_toml, pyproject)
-            file_created = True
-    return file_created
+                toml.dump(toml_content, pyproject)
+            file_updated = True
+    return file_updated
 
 
 def print_dry_run_info(system_call, work_folder=None):
@@ -624,7 +650,7 @@ def prepare_local_metadata_resource(metadata_source, target_dir, branch_or_tag, 
             raise RuntimeError(
                 "Offline mode set but no local metadata source available."
             )
-        git_clone(args.metadata_source, local_metadata_path, dry_run)
+        git_clone(metadata_source, local_metadata_path, dry_run)
 
     git_checkout(local_metadata_path, branch_or_tag, dry_run)
 
@@ -659,7 +685,7 @@ def main():
     )
 
     for target_dir in target_dirs:
-        sys.stdout.write(f"\n\n### NEW TARGET DIRECTORY: {target_dir}\n\n")
+        sys.stdout.write(f"\n\n{'#'*80}\n>>> NEW TARGET DIRECTORY <<<\n{target_dir}\n{'#'*80}\n\n")
         if args.new_branch:
             git_new_branch(target_dir, dry_run)
         if args.external:
@@ -681,30 +707,14 @@ def main():
         # 1) does not exist - must be created specific for type
         # 2) exists; must only be updated with keys/values of the
         # cubi metadata group
-        try:
-            target_pyproject = target_copy_path.joinpath(
-                "pyproject.toml"
-            ).resolve(strict=True)
-        except FileNotFoundError:
-            # need to assemble new toml
-            target_type = determine_target_repo_type(target_dir)
-            file_created = assemble_new_pyproject(
-                local_metadata_path, target_copy_path,
-                target_type, dry_run
-            )
-            if dry_run:
-                assert not file_created, f"Unintended file create: {target_copy_path}/pyproject.toml"
-        else:
-            # update existing toml
-            source_pyproject = local_metadata_path.joinpath(
-                "pyproject.toml"
-            ).resolve(strict=True)
-            file_updated = update_existing_pyproject(
-                source_pyproject, target_pyproject, dry_run,
-                args.report_skipped
-            )
-            if dry_run:
-                assert not file_updated, f"Unintended file update: {target_pyproject}"
+        target_type = determine_target_repo_type(target_dir)
+        file_updated = update_pyproject_toml(
+            local_metadata_path,
+            target_copy_path, target_type,
+            dry_run, args.report_skipped)
+
+        if dry_run:
+            assert not file_updated, f"Unintended file update: {target_copy_path}/pyproject.toml"
 
     sys.stdout.write("\n\n" + "-"*100 + "\n")
     sys.stdout.write("Update process complete - resetting metadata source repository to main branch\n")
