@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import collections as col
 import pathlib
 import sys
 import subprocess as sp
@@ -602,10 +603,10 @@ def get_pyproject_versions(workflow_target, workflow_branch):
     """
     # loading the pyproject.tomls:
     branch_pyproject = toml.load(
-        pathlib.Path(workflow_branch, "pyproject.toml"), _dict=dict
+        pathlib.Path(workflow_branch, "pyproject.toml"), _dict=col.OrderedDict
     )
     target_pyproject = toml.load(
-        pathlib.Path(workflow_target, "pyproject.toml"), _dict=dict
+        pathlib.Path(workflow_target, "pyproject.toml"), _dict=col.OrderedDict
     )
     # extracting the metadata versions:
     branch_metadata_version = branch_pyproject["cubi"]["metadata"]["version"]
@@ -651,7 +652,7 @@ def report_script_version():
 
     toml_file = cubi_tools_repo.joinpath("pyproject.toml").resolve(strict=True)
 
-    toml_file = toml.load(toml_file, _dict=dict)
+    toml_file = toml.load(toml_file, _dict=col.OrderedDict)
 
     cubi_tools_scripts = toml_file["cubi"]["tools"]["script"]
     version = None
