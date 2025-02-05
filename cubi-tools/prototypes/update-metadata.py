@@ -264,17 +264,6 @@ def get_labeled_toml_files(local_metadata_source, target_type):
 
     This function adresses gh#template-metadata-files#12
     """
-    # the metadata TOML
-    md_toml = local_metadata_source.joinpath("pyproject.toml").resolve(strict=True)
-    # the repository type-specific TOML (workflow, project etc.)
-    type_toml = local_metadata_source.joinpath(
-        "tomls", "cubi", target_type, "pyproject.toml"
-    ).resolve(strict=True)
-    # the tool/source code formatter TOML,
-    # configuring
-    fmt_toml = local_metadata_source.joinpath(
-        "tomls", "formatting", "pyproject.toml"
-    ).resolve(strict=True)
 
     # NB: since an OrderedDict is being used as
     # data structure for the TOML configuration,
@@ -282,11 +271,31 @@ def get_labeled_toml_files(local_metadata_source, target_type):
     # sections appear in the output. This is important
     # to make any meaningful check of file identity relying
     # on the MD5 checksum
-    labeled_tomls = [
-        (md_toml, "metadata"),
-        (type_toml, target_type),
-        (fmt_toml, None)
-    ]
+    labeled_tomls = []
+
+    # the metadata TOML
+    md_toml = local_metadata_source.joinpath("pyproject.toml").resolve(strict=True)
+    labeled_tomls.append((md_toml, "metadata"))
+
+    # the repository type-specific TOML (workflow, project etc.)
+    type_toml = local_metadata_source.joinpath(
+        "tomls", "cubi", target_type, "pyproject.toml"
+    ).resolve(strict=True)
+    labeled_tomls.append((type_toml, target_type))
+
+    # special template toml if the target repo is a workflow
+    if target_type == "workflow":
+        wf_template_toml = local_metadata_source.joinpath(
+            "tomls", "cubi","workflow", "template", "pyproject.toml"
+        ).resolve(strict=True)
+        labeled_tomls.append(wf_template_toml, "workflow/template")
+
+    # the tool/source code formatter TOML,
+    # configuring tools such as black
+    fmt_toml = local_metadata_source.joinpath(
+        "tomls", "formatting", "pyproject.toml"
+    ).resolve(strict=True)
+    labeled_tomls.append((fmt_toml, None))
 
     return labeled_tomls
 
