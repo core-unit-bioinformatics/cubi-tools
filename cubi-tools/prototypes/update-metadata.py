@@ -208,6 +208,9 @@ def determine_target_repo_type(target_dir):
         target_type = "project"
     elif target_dir.name == "cubi-tools":
         target_type = "tools"
+    elif target_dir.name.startswith("template-"):
+        if target_dir.name.endswith("-snakemake"):
+            target_type = "workflow/template"
     else:
         raise ValueError(
             f"Cannot determine repository type: {target_dir}"
@@ -315,6 +318,15 @@ def update_pyproject_sections(labeled_toml_files, target_content):
             continue
         elif new_pyproject:
             target_content["cubi"][toml_label] = col.OrderedDict()
+        elif toml_label == "workflow/template":
+            if new_pyproject:
+                # this is just a simple entry for the workflow
+                # template that cannot be automatically updated
+                target_content.update(source_content)
+                processed_sections.append("workflow.template")
+            else:
+                # just skip over it
+                continue
         else:
             pass
         section_content = source_content["cubi"][toml_label]
