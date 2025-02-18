@@ -4,7 +4,7 @@ version = "prototype"
 
 [[cubi.tools.script]]
 name = "update-metadata.py"
-version = "1.2.0"
+version = "1.3.0"
 
 [[cubi.tools.script]]
 name = "update_workflow.py"
