@@ -288,7 +288,7 @@ def get_labeled_toml_files(local_metadata_source, target_type):
         wf_template_toml = local_metadata_source.joinpath(
             "tomls", "cubi","workflow", "template", "pyproject.toml"
         ).resolve(strict=True)
-        labeled_tomls.append(wf_template_toml, "workflow/template")
+        labeled_tomls.append((wf_template_toml, "workflow/template"))
 
     # the tool/source code formatter TOML,
     # configuring tools such as black
