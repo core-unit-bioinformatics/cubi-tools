@@ -10,6 +10,10 @@ version = "1.3.0"
 name = "update_workflow.py"
 version = "0.3.0"
 
+[[cubi.tools.script]]
+name = "cluster-info.py"
+version = "0.2.0"
+
 [cubi.metadata]
 pid = "https://github.com/core-unit-bioinformatics/template-metadata-files"
 version = "1.5.0"
