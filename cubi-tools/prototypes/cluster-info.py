@@ -65,12 +65,16 @@ class NodeState(enum.Enum):
     online = 0
     free = 0
     jobbusy = 0
+    various = 0
 
 
 class Infrastructure(abc.ABC):
 
     def convert_ts(self, timestamp):
-        ts = dt.datetime.fromtimestamp(timestamp)
+        try:
+            ts = dt.datetime.fromtimestamp(timestamp)
+        except TypeError:
+            ts = dt.datetime.today()
         ts = ts.strftime("%Y-%m-%dT%H:%M:%S")
         return ts
 
@@ -82,14 +86,14 @@ class Infrastructure(abc.ABC):
 class PBSCluster(Infrastructure):
     __slots__ = ("name", "pbs_version", "pbs_server", "timestamp", "node_list")
 
-    def __init__(self, cluster_name, node_infos):
+    def __init__(self, cluster_name, node_infos, correct_smt=False):
 
         self.name = cluster_name
         self.pbs_version = node_infos["pbs_version"]
         self.pbs_server = node_infos["pbs_server"]
         self.timestamp = self.convert_ts(node_infos["timestamp"])
         self.node_list = [
-            ClusterNode(node_name, node_info)
+            ClusterNode(node_name, node_info, correct_smt)
             for node_name, node_info in node_infos["nodes"].items()
         ]
         if self.name == "infer":
@@ -274,7 +278,7 @@ class ClusterNode(Infrastructure):
         "rsrc_machine", "rsrc_used", "rsrc_remain",
     )
 
-    def __init__(self, node_name, node_infos):
+    def __init__(self, node_name, node_infos, correct_smt=False):
 
         self.id = node_name
         self.type = None
@@ -289,29 +293,39 @@ class ClusterNode(Infrastructure):
         )
         self.job_list = sorted(node_infos.get("jobs", []))
 
-        self.rsrc_machine = self._parse_resource_info(node_infos["resources_available"], True)
-        self.rsrc_used = self._parse_resource_info(node_infos["resources_assigned"])
-        self._estimate_node_load()
+        self.rsrc_machine = self._parse_resource_info(node_infos["resources_available"], True, correct_smt)
+        self.rsrc_used = self._parse_resource_info(node_infos["resources_assigned"], correct_smt)
 
         if self.type is None:
             self.type = "cpu"
             self.workloads = "cpu"
 
+        self._estimate_node_load()
+
         return None
 
     def __repr__(self):
 
-        node_status = (
-            f"=== node id: {self.id}\n"
-            f"node state: {self.state.name}\n"
-            f"node associated queues/Qlist resource: {self.queue_list}\n"
-            f"node load estimate: {self.load_estimate}\n"
-            f"node type/workloads: {self.type}\n"
-            f"node architecture: {self.rsrc_machine['cpu_microarchitecture']}\n"
-            f"node cpu cores: {self.rsrc_machine['cpu_cores']} (free: {self.rsrc_remain['cpu_cores']})\n"
-            f"node memory gb: {self.rsrc_machine['memory_gb']} (free: {self.rsrc_remain['memory_gb']})\n"
-            f"node gpu boards: {self.rsrc_machine['gpu_boards']} (free: {self.rsrc_remain['gpu_boards']})\n"
-        )
+        node_status = [
+            f"=== node id: {self.id}",
+            f"node state: {self.state.name}",
+            f"node associated queues/Qlist resource: {self.queue_list}",
+            f"node load estimate: {self.load_estimate}",
+            f"node type/workloads: {self.type}",
+            f"node architecture: {self.rsrc_machine['cpu_microarchitecture']}",
+            f"node cpu cores: {self.rsrc_machine['cpu_cores']} (free: {self.rsrc_remain['cpu_cores']})",
+            f"node memory gb: {self.rsrc_machine['memory_gb']} (free: {self.rsrc_remain['memory_gb']})",
+
+        ]
+        if self.type == "gpu":
+            node_status.extend(
+                [
+                    f"node gpu boards: {self.rsrc_machine['gpu_boards']} (free: {self.rsrc_remain['gpu_boards']})",
+                    f"node gpu boards model: {self.rsrc_machine['gpu_model']}"
+                ]
+            )
+        node_status = "\n".join(node_status) + "\n"
+
         return node_status
 
     def __eq__(self, other):
@@ -357,16 +371,20 @@ class ClusterNode(Infrastructure):
         all_states = [
             se.replace("-", "") for se in state_expr.split(",")
         ]
-        node_state = set(NodeState[s] for s in all_states)
+        node_state = set(NodeState[s.strip().strip("<>")] for s in all_states)
         if len(node_state) != 1:
             warn_msg = f"\nWarning: invalid node state: {state_expr} / {self.id}\n"
             sys.stderr.write(warn_msg)
             node_state = NodeState["invalid"]
         else:
             node_state = node_state.pop()
+            if node_state == "<various>":
+                warn_msg = f"\nWarning: undefined node state: {state_expr} / {self.id}\n"
+                sys.stderr.write(warn_msg)
+                node_state = NodeState["various"]
         return node_state
 
-    def _parse_resource_info(self, resource_info, assert_minimal_set=False):
+    def _parse_resource_info(self, resource_info, assert_minimal_set=False, correct_smt=False):
 
         machine_resources = []
         for rsrc_key, rsrc_value in resource_info.items():
@@ -377,7 +395,7 @@ class ClusterNode(Infrastructure):
                     norm_value = rsrc_value
                 else:
                     raise ValueError(f"{rsrc_key} --- {rsrc_value} (norm failed)")
-            if rsrc_key == "accelerator_model":
+            if rsrc_key in ["accelerator_model", "gpu_id"]:
                 if rsrc_value == "none":
                     self.workloads = "cpu"
                     self.type = "cpu"
@@ -388,16 +406,26 @@ class ClusterNode(Infrastructure):
                     gpu_model = norm_value
                 machine_resources.append(("gpu_model", gpu_model))
             if rsrc_key == "arch":
-                machine_resources.append(("cpu_microarchitecture", norm_value))
+                # fix (for the time being)
+                # currently, in the M-HPC, arch is always linux
+                # which does not carry any information
+                if norm_value != "linux":
+                    machine_resources.append(("cpu_microarchitecture", norm_value))
+                else:
+                    machine_resources.append(("cpu_microarchitecture", "unknown"))
             if rsrc_key == "host":
                 assert norm_value == self.id
             if rsrc_key == "ncpus":
-                machine_resources.append(("cpu_cores", int(norm_value)))
+                if correct_smt:
+                    cpu_cores = int(norm_value) // 2
+                else:
+                    cpu_cores = int(norm_value)
+                machine_resources.append(("cpu_cores", cpu_cores))
             if rsrc_key == "ngpus":
                 machine_resources.append(("gpu_boards", int(norm_value)))
             if rsrc_key == "mem":
                 machine_resources.append(("memory_gb", self._norm_mem_to_gibi(norm_value)))
-            if rsrc_key == "Qlist":
+            if rsrc_key in ["Qlist", "qlist"]:
                 self.queue_list = norm_value.split(",")
 
         machine_resources = col.OrderedDict(
@@ -430,7 +458,7 @@ class ClusterNode(Infrastructure):
             rsrc_remain[rsrc_key] = max(0, rsrc_value - rsrc_used)
             if rsrc_value == 0:
                 # NB: CPU servers have no GPU boards
-                assert self.workloads == "cpu"
+                assert self.workloads == "cpu", f"{rsrc_key} / {rsrc_value}: {self.rsrc_machine}"
             else:
                 load_value = rsrc_used / rsrc_value
                 load_values.append(load_value)
@@ -543,6 +571,20 @@ def parse_command_line():
     )
 
     parser.add_argument(
+        "--cluster-name", "-cn",
+        type=str,
+        default="infer",
+        dest="cluster_name"
+    )
+
+    parser.add_argument(
+        "--correct-smt", "-smt",
+        action="store_true",
+        default=False,
+        dest="correct_smt"
+    )
+
+    parser.add_argument(
         "--queue-resources", "-q",
         type=str,
         default=None,
@@ -557,11 +599,7 @@ def parse_command_line():
 
 def evaluate_cluster_status(node_infos, args):
 
-    if hasattr(args, "cluster_name"):
-        cluster_name = args.cluster_name
-    else:
-        cluster_name = "infer"
-    cluster = PBSCluster(cluster_name, node_infos)
+    cluster = PBSCluster(args.cluster_name, node_infos, args.correct_smt)
     if args.node_list != "no":
         cluster.print_node_list(
             args.node_type,
