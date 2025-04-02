@@ -15,7 +15,7 @@ name = "cluster-info.py"
 version = "0.2.0"
 
 [[cubi.tools.script]]
-name = "auto_git.py"
+name = "auto-git.py"
 version = "0.2"
 
 [cubi.metadata]
