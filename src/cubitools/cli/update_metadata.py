@@ -3,7 +3,7 @@
 import argparse as argp
 import collections as col
 import hashlib
-import pathlib
+import pathlib as pl
 import shutil
 import subprocess as sp
 import sys
@@ -13,40 +13,44 @@ import urllib.parse
 import semver
 import toml
 
-__prog__ = "update-metadata.py"
-# TODO
-# version reporting must be harmonized
-# across all CUBI tools and encapsulated
-# in a shared base library.
-# > here: function call is deferred to ArgumentParser
-__version__ = None
-
-DEFAULT_REF_REPO = "https://github.com/core-unit-bioinformatics/template-metadata-files.git"
-DEFAULT_NEW_BRANCH_NAME = "feat-update-metadata"
-
-# this list includes gitignore
-# and fixes gh#cubi-tools#53
-METADATA_FILES = [
-    ".gitignore",
-    "CITATION.md",
-    "LICENSE",
-    ".editorconfig"
-]
+from cubitools import __prog__, __license__, __version__
+from cubitools import __cubitools__
+from cubitools.constants import DEFAULT_WORKING_DIR, \
+    UPD_MD_DEFAULT_TEMPLATE_REPO, \
+    UPD_MD_DEFAULT_BRANCH_NAME, \
+    UPD_MD_DEFAULT_METADATA_FILES
 
 
 def parse_command_line():
 
     parser = argp.ArgumentParser(
         prog=__prog__,
-        description="Add or update metadata files for your CUBI repository.",
-        usage=f"{__prog__} --target-dir path/to/repo"
+        epilog=__cubitools__
+    )
+
+    parser.add_argument(
+        "--version",
+        "-v",
+        action="version",
+        version=__version__,
+        help="Show version and exit.",
+    )
+
+    parser.add_argument(
+        "--working-dir", "--root", "-wd", "-w",
+        type=lambda path: pl.Path(path).resolve(strict=True),
+        default=DEFAULT_WORKING_DIR,
+        dest="working_dir",
+        help=(
+            "Default working / root directory of operations. "
+            f"Default: {DEFAULT_WORKING_DIR}"
+        )
     )
 
     parser.add_argument(
         "--target-dir", "-t",
         "--update-dir", "-u",
-        "--working-dir", "-w",
-        type=lambda x: pathlib.Path(x).resolve(strict=True),
+        type=lambda x: pl.Path(x).resolve(strict=True),
         dest="target_dirs",
         nargs="+",
         help=(
@@ -66,11 +70,11 @@ def parse_command_line():
         "--ref-repo", "-r", "-md",
         type=str,
         dest="metadata_source",
-        default=DEFAULT_REF_REPO,
+        default=UPD_MD_DEFAULT_TEMPLATE_REPO,
         help=(
             "Reference repository used as template for the metadata files. "
             "This repository is the source of the update operation. "
-            f"Default: {DEFAULT_REF_REPO}"
+            f"Default: {UPD_MD_DEFAULT_TEMPLATE_REPO}"
         )
     )
 
@@ -123,7 +127,7 @@ def parse_command_line():
         dest="new_branch",
         help=(
             "If set, create a new branch in the target before updating files. "
-            f"The new branch will be named '{DEFAULT_NEW_BRANCH_NAME}'. "
+            f"The new branch will be named '{UPD_MD_DEFAULT_BRANCH_NAME}'. "
             "Default: False"
         )
     )
@@ -144,13 +148,6 @@ def parse_command_line():
         help="Work offline and skip operations accordingly. Default: False"
     )
 
-    parser.add_argument(
-        "--version", "-v",
-        action="version",
-        version=report_script_version(),
-        help="Displays version of this script.",
-    )
-
     if len(sys.argv) == 1:
         parser.print_help()
         parser.exit(status=2)
@@ -169,7 +166,7 @@ def check_online_resource(uri):
 def determine_local_metadata_source_path(metadata_source_path, target_parent_dir):
 
     try:
-        local_metadata_path = pathlib.Path(metadata_source_path).resolve(strict=True)
+        local_metadata_path = pl.Path(metadata_source_path).resolve(strict=True)
     except FileNotFoundError:
         # check if the path is an online source / URL
         if not check_online_resource(metadata_source_path):
@@ -187,7 +184,7 @@ def determine_local_metadata_source_path(metadata_source_path, target_parent_dir
         # now we know that it is an online resource;
         # it may nevertheless exist locally.
         local_metadata_path = target_parent_dir.joinpath(
-            pathlib.Path(metadata_source_path).stem
+            pl.Path(metadata_source_path).stem
         ).resolve()
 
     return local_metadata_path
@@ -444,7 +441,7 @@ def print_dry_run_info(system_call, work_folder=None):
     assert isinstance(cmd, str)
 
     if work_folder is None:
-        wd = pathlib.Path(".").resolve()
+        wd = DEFAULT_WORKING_DIR
     else:
         wd = work_folder
 
@@ -534,7 +531,7 @@ def git_checkout(local_metadata_path, branch_or_tag, dry_run):
 
 def git_new_branch(local_target_path, dry_run):
 
-    new_branch_name = DEFAULT_NEW_BRANCH_NAME
+    new_branch_name = UPD_MD_DEFAULT_BRANCH_NAME
     git_cmd = ["git", "switch", "-c", new_branch_name]
     if dry_run:
         print_dry_run_info(git_cmd, local_target_path)
@@ -639,40 +636,6 @@ def load_toml_file(file_path):
     return content
 
 
-def find_cubi_tools_top_level():
-    """Find the top-level folder of the cubi-tools
-    repository (starting from this script path).
-    """
-    script_path = pathlib.Path(__file__).resolve(strict=True)
-    script_folder = script_path.parent
-
-    git_cmd = ["git", "rev-parse", "--show-toplevel"]
-    repo_path = exec_system_call(git_cmd, script_folder, return_stdout=True)
-    repo_path = pathlib.Path(repo_path)
-    return repo_path
-
-
-def report_script_version():
-    """
-    Read out of the cubi-tools script version out of the 'pyproject.toml'.
-    """
-    cubi_tools_repo = find_cubi_tools_top_level()
-
-    toml_file = cubi_tools_repo.joinpath("pyproject.toml").resolve(strict=True)
-
-    toml_file = toml.load(toml_file, _dict=dict)
-    cubi_tools_scripts = toml_file["cubi"]["tools"]["script"]
-    version = None
-    for cubi_tool in cubi_tools_scripts:
-        if cubi_tool["name"] == __prog__:
-            version = cubi_tool["version"]
-    if version is None:
-        raise RuntimeError(
-            f"Cannot identify script version from pyproject cubi-tools::scripts entry: {cubi_tools_scripts}"
-        )
-    return version
-
-
 def prepare_local_metadata_resource(metadata_source, target_dir, branch_or_tag, dry_run, offline):
 
     local_metadata_path = determine_local_metadata_source_path(
@@ -731,7 +694,7 @@ def main():
                 target_copy_path.mkdir(parents=True, exist_ok=True)
         else:
             target_copy_path = target_dir
-        for md_file in METADATA_FILES:
+        for md_file in UPD_MD_DEFAULT_METADATA_FILES:
             file_updated = update_file(
                 md_file, local_metadata_path, target_copy_path, dry_run
             )
