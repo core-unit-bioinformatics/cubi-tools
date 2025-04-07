@@ -2,20 +2,42 @@
 
 This repository is a collection of helper tools and useful scipts for internal and
 external use. The CUBI tools are implemented with minimal dependencies outside of the
-Python standard library (Python v3.9). Currently, the only non-standard package is `toml`
-(`python3-toml`), which must be available to execute any CUBI tool.
+Python standard library (Python v3.11). Currently, the only non-standard packages are
+`toml` and `semver`, which must be available to execute any CUBI tool.
+
+## Installation
+
+### For developers
+
+0. Clone the repository and change into the repository root directory.
+1. Create the Conda environment specified in `envs/conda/cubi-tools-dev.yaml`:
+    - `conda env create -f envs/conda/cubi-tools-dev.yaml`
+2. Activate the environment:
+    - `conda activate cubi-tools-dev`
+3. Install the CUBI tools:
+    - `pip install --editable .`
+
+### For users
+
+0. Clone the repository and change into the repository root directory.
+1. Create the Conda environment specified in `envs/conda/cubi-tools.yaml`:
+    - `conda env create -f envs/conda/cubi-tools.yaml`
+2. Activate the environment:
+    - `conda activate cubi-tools`
+3. Install the CUBI tools:
+    - `pip install .`
 
 # Available tools
 
-- `auto-git.py`: automate init, clone and normalization of git repositories. Some features require
-a so-called identity file to work. See the [`auto-git` documentation](#auto-git.py) for details.
+- `ct-git`: automate init, clone and normalization of git repositories. See below for details.
+    - legacy script: `src::cubitools::cli::auto_git.py`
 - `update_metadata.py`: updates metadata files or initialized a new repo with metadata files
 - `update_workflow.py`: updates templated workflow files
 
 
 # Tool documentation
 
-## auto-git.py
+## ct-git
 
 ### Purpose
 
@@ -25,9 +47,12 @@ to CUBI standards (see [CUBI knowledge base](https://github.com/core-unit-bioinf
 ### Requirements: identity file(s)
 
 Configuring a git repository requires setting a user name and email address before commits to the repo can be made.
-The `auto-git.py` script extracts that info from local files. Those files are referred to as "identity files".
-By default, these identity files are expected to be located in `$HOME/.cubi-tools` and there must be one such file
+The `ct-git` utility extracts that info from local files. Those files are referred to as "identity files".
+By default, these identity files are expected to be located in `$HOME/.config/cubi-tools` and there must be one such file
 for each remote that is to be configured; that is, commonly, two files should be there: `github.id` and `githhu.id`.
+If these files are not found, the `ct-git` utility is querying the user for that information and creates
+the files for all standard CUBI git remotes.
+
 Identity files are simple text files with two lines: line one specifies the user name and line
 two specifies the email address:
 

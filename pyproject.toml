@@ -41,6 +41,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where=["src"]
 
+[tool.setuptools_scm]
+
 [cubi.tools]
 pid = "https://github.com/core-unit-bioinformatics/cubi-tools"
 version = "prototype"

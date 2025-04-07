@@ -6,62 +6,37 @@ import pathlib as pl
 import subprocess as sp
 import sys
 
-import toml
-
-
-Remote = col.namedtuple("Remote", "name org priority")
-
-
-def _extract_version():
-    """TODO
-    This function should be
-    moved into a common
-    package code base for all
-    CUBI tools
-    """
-
-    script_location = pl.Path(__file__).resolve(strict=True)
-    repo_path = script_location.parent.parent
-    assert repo_path.name == "cubi-tools"
-    pyproject_file = repo_path.joinpath("pyproject.toml").resolve(strict=True)
-    pyproject_desc = toml.load(pyproject_file)
-
-    script_version = None
-    for script_metadata in pyproject_desc["cubi"]["tools"]["script"]:
-        if __prog__ == script_metadata["name"]:
-            script_version = script_metadata["version"]
-            break
-    if script_version is None:
-        err_msg = (
-            f"No version number defined for this script ({__prog__})\n"
-            f"in pyproject.toml located at {pyproject_file}!"
-        )
-        raise ValueError(err_msg)
-    return script_version
-
-
-__prog__ = "auto_git.py"
-__version__ = _extract_version()
-__author__ = "Peter Ebert"
-__license__ = "MIT"
-__full_version__ = f"{__prog__} v{__version__} ({__license__} license)"
-
-
-KNOWN_REMOTES = {
-    "github.com": Remote("github", "core-unit-bioinformatics", 1),
-    "git.hhu.de": Remote("githhu", "cubi", 0),
-}
+from cubitools import __prog__, __license__, __version__
+from cubitools import __cubitools__
+from cubitools.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
 
 
 def parse_command_line():
-    parser = argp.ArgumentParser(prog=__prog__)
+
+    parser = argp.ArgumentParser(
+        prog=__prog__,
+        epilog=__cubitools__
+    )
+
     parser.add_argument(
         "--version",
         "-v",
         action="version",
-        version=__full_version__,
+        version=__version__,
         help="Show version and exit.",
     )
+
+    parser.add_argument(
+        "--working-dir", "--root", "-wd", "-w",
+        type=lambda path: pl.Path(path).resolve(strict=True),
+        default=DEFAULT_WORKING_DIR,
+        dest="working_dir",
+        help=(
+            "Default working / root directory of operations. "
+            f"Default: {DEFAULT_WORKING_DIR}"
+        )
+    )
+
     mutex = parser.add_mutually_exclusive_group(required=True)
     mutex.add_argument(
         "--clone",
@@ -115,21 +90,34 @@ def parse_command_line():
         default=False,
         help="Just print what you would do, but don't do it",
     )
-    default_git_id_folder = pl.Path.home().joinpath(".cubi-tools")
+
     parser.add_argument(
-        "--git-identities",
-        "-g",
-        type=lambda x: pl.Path(x).resolve(strict=False),
-        dest="identities",
-        default=default_git_id_folder,
+        "--cubi-tools-config", "--ct-config", "-cfg",
+        "--git-identities", "-g",
+        type=lambda x: pl.Path(x).resolve(strict=True),
+        dest="cubi_config_dir",
+        default=DEFAULT_CUBITOOLS_CONFIG_DIR[0],
         help=(
-            "Path to folder with git identity files for remotes. "
+            "Path to CUBI tools configuration folder. "
+            "For this tool, this folder contains the "
+            "git identity files for all git remotes. "
             "See README for details; in brief, an identity file for a "
             "remote is a 2-line text file stating the "
             "(1) author name and (2) email. "
-            f"Default: {default_git_id_folder}/*.id"
+            f"Default - any of the following:  {DEFAULT_CUBITOOLS_CONFIG_DIR}"
         )
     )
+
+    parser.add_argument(
+        "--no-user-config",
+        "--no-cfg",
+        "-noc",
+        action="store_true",
+        default=False,
+        dest="no_user_config",
+        help="Do not configure user name and email for git repository. Default: False",
+    )
+
     parser.add_argument(
         "--no-all-target",
         "--no-all",
@@ -139,15 +127,7 @@ def parse_command_line():
         dest="no_all",
         help="Do not configure multiple push targets / do not add virtual 'all' remote. Default: False",
     )
-    parser.add_argument(
-        "--no-user-config",
-        "--no-cfg",
-        "-noc",
-        action="store_true",
-        default=False,
-        dest="no_config",
-        help="Do not configure user name and email for git repository. Default: False",
-    )
+
     parser.add_argument(
         "--quiet", "-q",
         action="store_true",
@@ -157,15 +137,9 @@ def parse_command_line():
     )
     args = parser.parse_args()
 
-    if not args.no_config:
-        if not args.identities.is_dir():
-            raise ValueError(
-                "Configuring user name / email requires valid "
-                "path to identities folder with one identity "
-                "file per git remote (pattern: <remote>.id). "
-                "Identity folder path is currently set to\n"
-                f"{default_git_id_folder}"
-            )
+    if not args.no_user_config:
+        cubi_cfg_dir = check_cubi_config_dir(args.cubi_config_dir)
+        setattr(args, "cubi_config_dir", cubi_cfg_dir)
 
     if args.init is not None and args.init_preset == "githhu":
         setattr(args, "no_all", True)
@@ -195,6 +169,63 @@ def parse_command_line():
     return args
 
 
+def check_git_identity_files(config_dir):
+
+    missing_id_files = []
+    for git_remote in KNOWN_GIT_REMOTES.values():
+        id_file = config_dir.joinpath(f"{git_remote.name}.id")
+        try:
+            id_file.resolve(strict=True)
+        except FileNotFoundError:
+            missing_id_files.append(git_remote.name)
+    if len(missing_id_files) > 0:
+        err_msg = (
+            "The following ID files are missing for "
+            f"standard CUBI git remote servers: {missing_id_files}"
+        )
+        sys.stderr.write(f"\n{err_msg}\n")
+    return missing_id_files
+
+
+def dump_git_id_info(remote_name, cubi_config_dir):
+
+    id_file = cubi_config_dir.joinpath(f"{remote_name}.id")
+
+    query_name = f"Please provide your full name for git remote {remote_name}: "
+    user_name = input(query_name)
+    assert user_name, "User name cannot be empty"
+    query_mail = f"Please provide your e-mail for git remote {remote_name}: "
+    user_email = input(query_mail)
+    assert user_email, "User e-mail cannot be empty"
+
+    with open(id_file, "w") as dump:
+        _ = dump.write(user_name + "\n")
+        _ = dump.write(user_email + "\n")
+    return
+
+
+def check_cubi_config_dir(user_set_dir):
+
+    cubi_cfg_dir = None
+    if not user_set_dir.is_dir():
+        for directory in DEFAULT_CUBITOOLS_CONFIG_DIR:
+            if directory.is_dir():
+                cubi_cfg_dir = directory
+                break
+        if cubi_cfg_dir is None:
+            cubi_cfg_dir = DEFAULT_CUBITOOLS_CONFIG_DIR[0]
+            cubi_cfg_dir.mkdir(parents=True)
+    else:
+        cubi_cfg_dir = user_set_dir
+
+    missing_id_files = check_git_identity_files(cubi_cfg_dir)
+    if len(missing_id_files) > 0:
+        for git_remote in missing_id_files:
+            dump_git_id_info(git_remote, cubi_cfg_dir)
+
+    return cubi_cfg_dir
+
+
 def parse_git_url(url):
     try:
         prefix, remainder = url.split("@")
@@ -207,7 +238,7 @@ def parse_git_url(url):
                 f"\nERROR: repository URL does not contain '@': {url}\n"
                 "The repository was likely cloned via 'https' and not via ssh.\n"
                 "Please clone/checkout the repo via ssh, e.g., by using the CUBI tools "
-                "'auto_git.py --clone' functionality. Aborting ...\n\n"
+                "'ct-git --clone' functionality. Aborting ...\n\n"
             )
         )
         raise
@@ -216,15 +247,15 @@ def parse_git_url(url):
     remainder, suffix = remainder.rsplit(".", 1)
     assert prefix == suffix == "git"
     remote_by_url, remainder = remainder.split(":", 1)
-    assert remote_by_url in KNOWN_REMOTES
+    assert remote_by_url in KNOWN_GIT_REMOTES
     user_or_org, remainder = remainder.split("/", 1)
     repo_name = remainder
     infos = {
         "remote_url": remote_by_url,
-        "remote_name": KNOWN_REMOTES[remote_by_url].name,
+        "remote_name": KNOWN_GIT_REMOTES[remote_by_url].name,
         "user": user_or_org,
         "repo_name": repo_name,
-        "priority": KNOWN_REMOTES[remote_by_url].priority,
+        "priority": KNOWN_GIT_REMOTES[remote_by_url].priority,
         "remote_path": url,
     }
     return infos
@@ -232,7 +263,7 @@ def parse_git_url(url):
 
 def build_default_remote_infos(remote_name, repo_name):
     remote_path = None
-    for remote_url, remote_specs in KNOWN_REMOTES.items():
+    for remote_url, remote_specs in KNOWN_GIT_REMOTES.items():
         if remote_specs.name != remote_name:
             continue
         remote_org = remote_specs.org
@@ -245,7 +276,7 @@ def build_default_remote_infos(remote_name, repo_name):
 
 def set_push_targets(git_infos, wd, dry_run):
     all_remote_paths = []
-    for remote_url, remote in KNOWN_REMOTES.items():
+    for remote_url, remote in KNOWN_GIT_REMOTES.items():
         remote_git_path = f"git@{remote_url}:{remote.org}/{git_infos['repo_name']}.git"
         all_remote_paths.append(remote_git_path)
         cmd = " ".join(["git", "remote", "add", f"{remote.name}", remote_git_path])
@@ -398,8 +429,8 @@ def main():
 
     if not args.no_all:
         set_push_targets(git_infos, wd, args.dryrun)
-    if not args.no_config:
-        set_git_identity(git_infos, wd, args.identities, args.dryrun)
+    if not args.no_user_config:
+        set_git_identity(git_infos, wd, args.cubi_config_dir, args.dryrun)
 
     if not args.quiet:
         hints = (
