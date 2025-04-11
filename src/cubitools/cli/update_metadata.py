@@ -207,6 +207,11 @@ def determine_target_repo_type(target_dir):
         target_type = "tools"
     elif target_dir.name.startswith("template-"):
         if target_dir.name.endswith("-snakemake"):
+            # Why this notation with '/'?
+            # the repository target type will be used
+            # as an infix to build the complete path
+            # to the correct pyproject.toml file
+            # in the template-metadata-files repository
             target_type = "workflow/template"
     else:
         raise ValueError(
@@ -280,13 +285,6 @@ def get_labeled_toml_files(local_metadata_source, target_type):
     ).resolve(strict=True)
     labeled_tomls.append((type_toml, target_type))
 
-    # special template toml if the target repo is a workflow
-    if target_type == "workflow":
-        wf_template_toml = local_metadata_source.joinpath(
-            "tomls", "cubi","workflow", "template", "pyproject.toml"
-        ).resolve(strict=True)
-        labeled_tomls.append((wf_template_toml, "workflow/template"))
-
     # the tool/source code formatter TOML,
     # configuring tools such as black
     fmt_toml = local_metadata_source.joinpath(
@@ -322,17 +320,15 @@ def update_pyproject_sections(labeled_toml_files, target_content):
             target_content.update(source_content)
             processed_sections.append("tool.*")
             continue
-        elif new_pyproject:
-            target_content["cubi"][toml_label] = col.OrderedDict()
         elif toml_label == "workflow/template":
             if new_pyproject:
                 # this is just a simple entry for the workflow
                 # template that cannot be automatically updated
                 target_content.update(source_content)
                 processed_sections.append("workflow.template")
-            else:
-                # just skip over it
-                continue
+            continue
+        elif new_pyproject:
+            target_content["cubi"][toml_label] = col.OrderedDict()
         else:
             pass
         section_content = source_content["cubi"][toml_label]
@@ -342,36 +338,46 @@ def update_pyproject_sections(labeled_toml_files, target_content):
             # is an atomic type; complex types such as lists
             # or OrderedDicts describe repo type-specific
             # metadata that cannot be updated by this script
+            # Special cases:
+            # 1. workflow init: insert workflow template section
+            if toml_label == "workflow" and new_pyproject:
+                if key == "template":
+                    target_content["cubi"][toml_label]["template"] = source_value
+                    for template_key, template_value in source_value.items():
+                        operations.append(
+                            (f"{toml_label}.template", "new", key, "<missing>", template_value)
+                        )
+                    processed_sections.append(f"cubi.{toml_label}.template")
             if not is_atomic_type(source_value):
                 continue
             try:
                 target_value = target_content["cubi"][toml_label][key]
                 if target_value == source_value:
-                    operations.append(("skip-id", key, target_value, "<identical>"))
+                    operations.append((toml_label, "skip-id", key, target_value, "<identical>"))
                 elif toml_label == "metadata":
                     # special case: the value is different and we are in
                     # the pyproject metadata section; here, we can just
                     # replace the old value since it cannot be specific
                     # to the repository we are updating.
                     target_content["cubi"]["metadata"][key] = source_value
-                    operations.append(("update", key, target_value, source_value))
+                    operations.append((toml_label, "update", key, target_value, source_value))
                     modifying_ops += 1
                 else:
-                    operations.append(("skip-ex", key, target_value, source_value))
+                    operations.append((toml_label, "skip-ex", key, target_value, source_value))
             except KeyError:
                 # 1 - new keys can always be added; they just represent
                 # an updated/extension of the respective TOML
                 # 2 - this code path is always taken for new/empty
                 # pyproject tomls; not very efficient
-                operations.append(("new", key, "<missing>", source_value))
+                operations.append((toml_label, "new", key, "<missing>", source_value))
                 target_content["cubi"][toml_label][key] = source_value
                 modifying_ops += 1
         processed_sections.append(f"cubi.{toml_label}")
 
     joined_labels = "|".join(processed_sections)
     summary_info = f"pyproject.toml\nsections: [{joined_labels}]\nupdate operations:\n"
-    for op, key, old, new in operations:
-        summary_info += f"{op} {key}: {old} -> {new}\n"
+    for section, op, key, old, new in operations:
+        summary_info += f"{section} - {op} {key}: {old} -> {new}\n"
 
     return modifying_ops, summary_info
 
