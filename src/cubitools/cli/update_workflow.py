@@ -1,121 +1,23 @@
 #!/usr/bin/env python3
 
 import collections as col
-import pathlib
+import itertools as itt
+import pathlib as pl
 import sys
 import subprocess as sp
 import argparse as argp
 import os
 import shutil
 import hashlib
+import urllib
+
+import semver
 import toml
 
-
-__prog__ = "update_workflow.py"
-
-
-def main():
-    """
-    Main function of the 'update-workflow.py' script.
-    """
-
-    args = parse_command_line()
-    dryrun = args.dryrun
-
-    # Is it a dry run?
-    if dryrun:
-        print("\nTHIS IS A DRY RUN!!")
-
-    # check if project directory exist:
-    workflow_target = pathlib.Path(args.workflow_dir).resolve()
-    if not workflow_target.is_dir():
-        raise FileNotFoundError(
-            f"The project directory {workflow_target} doesn't exist!"
-        )
-    print(f"Project directory set as: {workflow_target}\n")
-
-    ref_repo = args.ref_repo
-    branch = args.branch
-    metadata = args.metadata
-
-    # The location of the 'template-snakemake" folder holding branch/version tag
-    # needs to be parallel the project directory or provided via '--ref-repo'.
-    if ref_repo != DEFAULT_REF_REPO:
-        workflow_branch = pathlib.Path(args.ref_repo).resolve()
-        if not workflow_branch.is_dir():
-            raise FileNotFoundError(
-                f"The reference directory {workflow_branch} does not exist."
-            )
-        print(f"Reference directory set as: {workflow_branch}")
-    else:
-        workflow_branch = pathlib.Path(
-            pathlib.Path(f"{workflow_target}").resolve().parents[0],
-            "template-snakemake",
-        ).resolve()
-        print(f"Reference directory set as: {workflow_branch}")
-
-    # detect if workflow is based on CUBI's template_snakemake repo
-    # The file '/workflow/rules/commons/10_constants.smk' should be present
-    # if template_snakemake was used to create project folder
-    if (
-        not pathlib.Path(workflow_target)
-        .joinpath("workflow", "rules", "commons", "10_constants.smk")
-        .is_file()
-    ):
-        answer_is_pos = user_response(
-            "ARE YOU SURE THIS PROJECT IS BASED ON CUBI'S "
-            "'template_snakemake' REPOSITORY"
-        )
-        if not answer_is_pos:
-            raise SystemExit(
-                "This project is not based on CUBI's 'template_snakemake'. "
-                "No changes have been made!"
-            )
-
-    # Clone/update the 'template-snakemake' repo
-    # into a local folder if it exists
-    clone(workflow_target, ref_repo, branch, workflow_branch, dryrun)
-
-    # Call function to create the list of files and folders that
-    # should be made/copied/updated:
-    # Function creates tuple with 2 entries:
-    # [0] = files to be updated
-    # [1] = subfolders present in workflow branch
-    update_information = update_file_list(workflow_branch, metadata, dryrun)
-
-    dirs_to_make = [
-        workflow_target / dir_path.relative_to(workflow_branch)
-        for dir_path in update_information[1]
-    ]
-
-    for directories in dirs_to_make:
-        os.makedirs(directories, exist_ok=True)
-
-    # Updating routine of the metadata files
-    for file_to_update in update_information[0]:
-        if file_to_update == "pyproject.toml":
-            update_pyproject_toml(workflow_target, workflow_branch, branch, dryrun)
-        else:
-            print(
-                f"Comparing if local '{file_to_update}' differs from version in "
-                f"branch/version tag '{branch}' in the 'template-snakemake' repo"
-            )
-            update_file(workflow_target, workflow_branch, file_to_update, dryrun)
-
-    # For 'git pull' you have to be in a branch of the template-snakemake repo to
-    # merge with. If you previously chose a version tag to update from, 'git pull' will
-    # throw a waning message. This part will reset the repo to the main branch to avoid
-    # any warning message stemming from 'git pull'
-    command_reset = ["git", "checkout", "main", "-q"]
-    sp.run(
-        command_reset,
-        cwd=workflow_branch,
-        check=False,
-    )
-
-    print("\nUPDATE COMPLETED!")
-
-    return None
+from cubitools import __prog__, __license__, __version__
+from cubitools import __cubitools__
+from cubitools.constants import DEFAULT_WORKING_DIR, \
+    UPD_WF_DEFAULT_TEMPLATE_REPO
 
 
 def parse_command_line():
@@ -124,44 +26,42 @@ def parse_command_line():
     """
     parser = argp.ArgumentParser(
         prog=__prog__,
-        description="Add or update workflow files for your repository. "
-        "Example: python3 update_workflow.py --workflow-dir path/to/repo",
+        epilog=__cubitools__
     )
     parser.add_argument(
-        "--workflow_dir",
-        "-w",
-        type=pathlib.Path,
-        help="(Mandatory) Directory where workflow template files "
-        "should be copied/updated.",
+        "--version",
+        "-v",
+        action="version",
+        version=__version__,
+        help="Displays version of this script.",
+    )
+    parser.add_argument(
+        "--workflow-target", "--update-workflow",
+        "--workflow",  "-wf",
+        type=lambda p: pl.Path(p).resolve(strict=True),
+        dest="workflow_target",
+        help="Workflow directory that is the target of the update operation.",
         required=True,
     )
-    global DEFAULT_REF_REPO
-    DEFAULT_REF_REPO = (
-        "https://github.com/core-unit-bioinformatics/template-snakemake.git"
-    )
     parser.add_argument(
-        "--ref-repo",
+        "--template-workflow-repository",
+        "--reference-repository",
+        "--workflow-source",
+        "--ref-repo", "-r",
         type=str,
-        nargs="?",
-        default=DEFAULT_REF_REPO,
-        help="Reference/remote repository used to clone files. "
-        f"Default: {DEFAULT_REF_REPO}",
+        default=UPD_WF_DEFAULT_TEMPLATE_REPO,
+        dest="workflow_source",
+        help=(
+            "Workflow template repository that is the source of the update operation. "
+            f"Default: {UPD_WF_DEFAULT_TEMPLATE_REPO}"
+        )
     )
     parser.add_argument(
         "--branch",
         "-b",
         type=str,
-        nargs="?",
         default="main",
         help="Branch or version tag from which to update the files. Default: main",
-    )
-    parser.add_argument(
-        "--metadata",
-        "-m",
-        action="store_true",
-        default=False,
-        dest="metadata",
-        help="Also metadata files will be updated. Default: False",
     )
     parser.add_argument(
         "--dry-run",
@@ -170,132 +70,140 @@ def parse_command_line():
         "-dry",
         action="store_true",
         default=False,
-        dest="dryrun",
+        dest="dry_run",
         help="Just report actions but do not execute them. Default: False",
     )
     parser.add_argument(
-        "--version",
-        "-v",
-        action="version",
-        version=report_script_version(),
-        help="Displays version of this script.",
+        "--no-git-add", "-noa",
+        action="store_true",
+        default=False,
+        dest="no_git_add",
+        help=(
+            "If set, do not execute 'git add <updated files>' in the target repository. "
+            "This option is ignored in a dry run. Default: False"
+        )
     )
+
     # if no arguments are given, print help
     if len(sys.argv) == 1:
         parser.print_help()
-        parser.exit()  # default is code 0
+        parser.exit(2)
+
     args = parser.parse_args()
     return args
 
 
-def clone(workflow_target, ref_repo, branch, workflow_branch, dryrun):
+def check_online_resource(uri):
+
+    url_parser = urllib.parse.urlparse
+    result = url_parser(uri)
+    # No support for http - yes [!?]
+    return result.scheme == "https"
+
+
+def check_is_git_repo(path):
+    return path.joinpath(".git").resolve().is_dir()
+
+
+def check_is_cubi_workflow(path):
+
+    constants_exist = path.joinpath(
+        "workflow", "rules", "commons", "10_constants.smk"
+    ).is_dir()
+    modules_exist = path.joinpath(
+        "workflow", "rules", "00_modules.smk"
+    ).is_dir()
+    return constants_exist and modules_exist
+
+
+def print_dry_run_info(system_call, work_folder=None):
+    """TODO: move to library
     """
-    Check if the 'template-snakemake' repo is already parallel to the
-    project directory. If the 'template-snakemake' repo exists this folder is
-    getting updated via a 'git pull --all' command. If that is not the case,
-    the 'template-snakemake' repo will be cloned parallel to the project
-    directory unless the branch or version tag don't exist,
-    then an FileNotFoundError will be called to stop the script.
-    """
-    if dryrun:
-        if not workflow_branch.is_dir():
-            raise FileNotFoundError(
-                "For default usage the 'template-metadata-files' repo needs to be "
-                f"present parallel to the project directory {workflow_target}.\n"
-                "If you provided a local location via the '--ref-repo' option make sure"
-                " it's present and a git repository."
-            )
-        else:
-            print(
-                "The requested branch/version tag (default: main) is present "
-                "and is getting updated via 'git pull -all' .\n"
-            )
-            git_pull_template(workflow_branch, branch)
+    if isinstance(system_call, list):
+        cmd = " ".join(map(str, system_call))
     else:
-        if workflow_branch.is_dir():
-            git_pull_template(workflow_branch, branch)
-        else:
-            git_clone_template(ref_repo, workflow_branch, workflow_target, branch)
-    return None
+        cmd = system_call
+    assert isinstance(cmd, str)
+
+    if work_folder is None:
+        wd = DEFAULT_WORKING_DIR
+    else:
+        wd = work_folder
+
+    info_msg = (
+        "\n=== DRY RUN INFO ===\n"
+        "Would execute command:\n"
+        f"> {cmd}\n"
+        f"In folder: {wd}\n"
+    )
+    print(info_msg)
+
+    return
 
 
-def git_pull_template(workflow_branch, branch):
+def git_checkout_branch_tag(template_repo, template_branch_tag, is_dry_run, skip_pull=False):
     """
     This function will pull updates from the remote template repository.
     """
-    command = [
-        "git",
-        "pull",
-        "--all",
-        "-q",
-    ]
-    sp.run(
-        command,
-        cwd=workflow_branch,
-        check=False,
-    )
-    command_checkout = ["git", "checkout", "".join({branch}), "-q"]
-    checkout_cmd = sp.run(
-        command_checkout,
-        cwd=workflow_branch,
-        stderr=sp.PIPE,
-        check=False,
-    )
-    # If the 'template-metadata-files' folder is not a Git repo
-    # an error message that contains the string 'fatal:' will be thrown
-    warning = "fatal:"
-    if warning in str(checkout_cmd.stderr.strip()):
-        raise FileNotFoundError(
-            f"The folder {workflow_branch} is not a git repository! "
-            "If you provided the location via the '--ref-repo' option make sure "
-            "it's a git repository or don't use the '--ref-repo' option. \n"
-            "Otherwise delete/move the 'template-snakemake' folder, which is "
-            "located parallel to the repository that is getting updated and rerun!!"
-        )
-    # If you try to clone a repo/branch/tag that doesn't exist
-    # Git will throw an error message that contains the string 'error:'
-    error = "error:"
-    if error in str(checkout_cmd.stderr.strip()):
-        raise FileNotFoundError(
-            f"The branch or version tag named '{branch}' doesn't exist"
-        )
+    if not skip_pull:
+        command_pull = [
+            "git",
+            "pull",
+            "--all",
+            "-q",
+        ]
+        if is_dry_run:
+            print_dry_run_info(command_pull, template_repo)
+        else:
+            _ = sp.run(
+                command_pull,
+                cwd=template_repo,
+                check=True,
+            )
+
+    command_checkout = ["git", "checkout", template_branch_tag, "-q"]
+    if is_dry_run:
+        print_dry_run_info(command_checkout, template_repo)
+    else:
+        try:
+            _ = sp.run(
+                command_checkout,
+                cwd=template_repo,
+                stderr=sp.PIPE,
+                stdout=sp.PIPE,
+                check=True,
+            )
+        except sp.CalledProcessError:
+            # unclear is special handling is required
+            raise
     return None
 
 
-def git_clone_template(ref_repo, workflow_branch, workflow_target, branch):
+def git_clone_template(template_remote, wd, is_dry_run=False):
     """
-    This function will clone the template repository into a folder parallel
-    to the folder to get updated.
+    This function will clone the template repository,
+    by default parallel to the workflow target folder.
     """
     command = [
         "git",
         "clone",
         "-q",
-        "-c advice.detachedHead=false",
-        ref_repo,
-        workflow_branch,
+        template_remote
     ]
-    clone_cmd = sp.run(
-        command,
-        stdout=sp.PIPE,
-        stderr=sp.PIPE,
-        cwd=workflow_target,
-        check=False,
-    )
-    # If the 'template-metadata-files' folder is not a Git repo
-    # an error message that contains the string 'fatal:' will be thrown
-    warning = "fatal:"
-    if warning in str(clone_cmd.stderr.strip()):
-        raise FileNotFoundError(
-            "The repository or folder you entered or the branch or version tag "
-            f"named '{branch}' doesn't exist"
-        )
-    command_checkout = ["git", "checkout", "".join({branch}), "-q"]
-    sp.run(
-        command_checkout,
-        cwd=workflow_branch,
-        check=False,
-    )
+    if is_dry_run:
+        print_dry_run_info(command, wd)
+    else:
+        try:
+            _ = sp.run(
+                command,
+                stdout=sp.PIPE,
+                stderr=sp.PIPE,
+                cwd=wd,
+                check=True,
+            )
+        except sp.CalledProcessError:
+            # unclear if special handling is required
+            raise
     return None
 
 
@@ -320,154 +228,121 @@ def calculate_md5_checksum(file_path):
     return md5_hash
 
 
-def update_file(workflow_target, workflow_branch, file_to_update, dryrun):
+def update_file(workflow_target, workflow_template, file_to_update, is_dry_run):
     """
     The MD5 checksum of the the local workflow file(s) and the template_snakemake
     file(s) in the desired branch or version tag are being compared.
     If they differ a question to update for each different
     workflow file pops up. If an update is requested it will be performed.
-
-    Args:
-        workflow_target (pathlib.Path):
-            The folder being processed / receiving the update
-        workflow_branch (pathlib.Path):
-            The branch folder of the update process, i.e., that should
-            almost always refer to 'template-snakemake'
     """
-    workflow_target_file = workflow_target.joinpath(file_to_update)
-    workflow_branch_file = workflow_branch.joinpath(file_to_update)
-    md5_local = calculate_md5_checksum(workflow_target_file)
-    md5_ref = calculate_md5_checksum(workflow_branch_file)
+    source_file_path = workflow_template.joinpath(file_to_update).resolve(strict=True)
+    target_file_path = workflow_target.joinpath(file_to_update)
+    source_md5 = calculate_md5_checksum(source_file_path)
+    target_md5 = calculate_md5_checksum(target_file_path)
+    if not target_md5:
+        target_md5 = "(non-existing)"
 
-    if md5_local != md5_ref:
-        if dryrun:
-            print(f"The versions of '{file_to_update}' differ!")
-            print(f"Local MD5 checksum: {md5_local}")
-            print(f"Remote MD5 checksum: {md5_ref}")
-            print(f"Update '{file_to_update}'(y/n)? y")
-            print(f"Dry run! '{file_to_update}' would be updated!")
+    file_updated = True
+    if source_md5 != target_md5:
+        print('-----')
+        print(f"MD5 mismatch for file: {file_to_update}")
+        print(f"Target MD5: {target_md5}")
+        if is_dry_run:
+            print("This is a dry run - no update")
+            file_updated = False
         else:
-            print(f"The versions of '{file_to_update}' differ!")
-            print(f"Local MD5 checksum: {md5_local}")
-            print(f"Remote MD5 checksum: {md5_ref}")
             answer_is_pos = user_response(f"Update '{file_to_update}'")
 
             if answer_is_pos:
+                target_file_path.parent.mkdir(exist_ok=True, parents=True)
                 shutil.copyfile(
-                    workflow_branch.joinpath(file_to_update),
-                    workflow_target.joinpath(file_to_update),
+                    source_file_path, target_file_path
                 )
                 print(f"'{file_to_update}' was updated!")
             else:
-                print(f"'{file_to_update}' was NOT updated!")
+                print(f"User skipped update of '{file_to_update}'")
+                file_updated = False
     else:
-        print(f"'{file_to_update}' is up-to-date!")
-    return None
+        print(f"MD5 match for file: {file_to_update}")
+        file_updated = False
+    return file_updated
 
 
-def update_pyproject_toml(workflow_target, workflow_branch, branch, dryrun):
+def get_workflow_template_version(workflow_repository):
     """
-    The 'pyproject.toml' is treated a little bit differently. First, there is
-    a check if the file even exists in the project directory. If that is not the
-    case it will be copied into that folder from the desired branch or version tag.
-    If the file is present it will be checked if the cubi.workflow.template.version
-    (and only that information!) differs between the local and the requested branch
-    or version tag version. If that is the case the cubi.workflow.template.version
-    is getting updated. If the 'metadata' switch is set also the cubi.metadata.version
-    will be updated (if necessary).
+    Read the workflow template version string from a pyproject toml file
     """
-    if not workflow_target.joinpath("pyproject.toml").is_file():
-        if dryrun:
-            print(
-                "\nThere is no 'pyproject.toml' in your folder. "
-                "Do you want to add 'pyproject.toml'(y/n)? y"
-                "\nDry run! 'pyproject.toml' would have been added!"
-            )
+    pyproject_file = workflow_repository.joinpath("pyproject.toml").resolve(strict=True)
+
+    pyproject_content = toml.load(pyproject_file, _dict=col.OrderedDict)
+
+    try:
+        workflow_template_version = semver.Version.parse(
+            pyproject_content["cubi"]["workflow"]["template"]["version"]
+        )
+    except ValueError:
+        raw_version = pyproject_content["cubi"]["workflow"]["template"]["version"]
+        if raw_version in ["prototype", "undefined"]:
+            workflow_template_version = semver.Version.parse("0.0.0-prototype")
         else:
+            raise
+
+    return workflow_template_version, pyproject_content
+
+
+def update_pyproject_toml(workflow_target, workflow_template, template_remote, updated_files, is_dry_run):
+    """Note that a pyproject.toml must exist because the workflow
+    repository must have been initialized with the proper metadata first.
+    """
+    template_version_source, _ = get_workflow_template_version(workflow_template)
+    template_version_target, target_pyproject = get_workflow_template_version(workflow_target)
+
+    # first, some sanity check - are we downgrading?
+    file_updated = False
+    if template_version_source < template_version_target:
+        warn_msg = (
+            "\n===\nWarning: workflow template version in source (= the reference "
+            "repository) is smaller than the workflow template version in "
+            "the target. This means you are effectively downgrading the "
+            "workflow template in the target repository.\n===\n"
+        )
+        sys.stderr.write(warn_msg)
+
+    if template_version_source == template_version_target:
+        if updated_files:
+            err_msg = (
+                "Error: workflow template version match between source/reference "
+                f"and target repository, but files were updated: {updated_files}. "
+                "Please investigate and fix the problem manually. "
+                f"Workflow template version: {template_version_target}"
+            )
+            raise RuntimeError(err_msg)
+        else:
+            print("Workflow template version is identical - not updating")
+    else:
+        if is_dry_run:
+            print("=== DRY RUN ===")
+            print("Not updating workflow template version in pyproject.toml")
+            print(f"Would update from version {template_version_source} to version {template_version_target}")
+        else:
+            version_string = str(template_version_source)
+            target_pyproject["cubi"]["workflow"]["template"]["version"] = version_string
+            target_pyproject["cubi"]["workflow"]["template"]["pid"] = template_remote
+
             answer_is_pos = user_response(
-                "There is no 'pyproject.toml' in your folder. Add 'pyproject.toml'"
+                "Ready to update workflow template information "
+                "in the target pyproject.toml - proceed"
             )
-
             if answer_is_pos:
-                shutil.copyfile(
-                    workflow_branch.joinpath("pyproject.toml"),
-                    workflow_target.joinpath("pyproject.toml"),
-                )
-                print("'pyproject.toml' was added!")
-            else:
-                print("'pyproject.toml' was NOT added!")
-    else:
-        pyproject_versions = get_pyproject_versions(workflow_target, workflow_branch)
-        # Just to clearly state which information/files are generated by the
-        # function 'get_metadata_versions(metadata_branch, metadata_target)':
-
-        # Metadata version of the branch (str):
-        branch_metadata_version = pyproject_versions[0]
-        # Metadata version of the target (str):
-        target_metadata_version = pyproject_versions[1]
-        # Target pyproject toml w/ updated metadata version (dict):
-        branch_workflow_version = pyproject_versions[2]
-        target_workflow_version = pyproject_versions[3]
-        target_pyproject = pyproject_versions[4]
-
-        if (
-            branch_metadata_version != target_metadata_version
-            or branch_workflow_version != target_workflow_version
-        ):
-            if dryrun:
-                print(
-                    "\nYou updated your local repo with the 'template-snakemake' "
-                    f"in branch/version tag '{branch}'."
-                    "\nDo you want to update the workflow version in "
-                    "'pyproject.toml'(y/n)? y"
-                )
-                print(
-                    "Dry run!\n"
-                    "\nMetadata version in 'pyproject.toml' would have been updated "
-                    f"from version '{target_metadata_version}' to version "
-                    f"'{branch_metadata_version}'! and "
-                    "\nWorkflow version in 'pyproject.toml' would have been updated "
-                    f"from version '{target_workflow_version}' to version "
-                    f"'{branch_workflow_version}'!"
-                )
-            else:
-                answer_is_pos = user_response(
-                    "\nYou updated your local repo with the 'template-snakemake' "
-                    f"in branch/version tag '{branch}'."
-                    "\nDo you want to update the workflow version in "
-                    "'pyproject.toml'"
-                )
-
-                if answer_is_pos:
-                    with open(
-                        pathlib.Path(workflow_target, "pyproject.toml"),
-                        "w",
-                        encoding="utf-8",
-                    ) as text_file:
-                        text_file.write(toml.dumps(target_pyproject, encoder=None))
-                    print(
-                        "\nMetadata version in 'pyproject.toml' was updated from "
-                        f"version '{target_metadata_version}' to version "
-                        f"'{branch_metadata_version}'! and "
-                        "\nWorkflow version in 'pyproject.toml' was updated from "
-                        f"version '{target_workflow_version}' to version "
-                        f"'{branch_workflow_version}'!"
+                target_pyproject_file = workflow_target.joinpath("pyproject.toml")
+                with open(target_pyproject_file, "w", encoding="utf-8") as pyproject:
+                    pyproject.write(
+                        toml.dumps(target_pyproject, encoder=None)
                     )
-                else:
-                    print(
-                        "The 'pyproject.toml' metadata version was NOT updated from "
-                        f"version '{target_metadata_version}' to version "
-                        f"'{branch_metadata_version}' and "
-                        "The 'pyproject.toml' workflow version was NOT updated from "
-                        f"version '{target_workflow_version}' to version "
-                        f"'{branch_workflow_version}'!"
-                    )
-        else:
-            print(
-                "\nMetadata and workflow versions in 'pyproject.toml' are "
-                "up-to-date!\n"
-            )
-    return None
+                file_updated = True
+            else:
+                print("User skipped update of target pyproject.toml")
+    return file_updated
 
 
 def user_response(question, attempt=0):
@@ -476,16 +351,16 @@ def user_response(question, attempt=0):
     the metadata files.
     """
     attempt += 1
-    prompt = f"{question}? (y/n): "
+    prompt = f"{question}? (Y/n): "
     answer = input(prompt).strip().lower()
-    pos = ["yes", "y", "yay"]
+    pos = ["yes", "y", "yay", ""]
     neg = ["no", "n", "nay"]
     if attempt == 2:
-        print("YOU HAVE ONE LAST CHANCE TO ANSWER THIS (y/n) QUESTION!")
+        print("YOU HAVE ONE LAST CHANCE TO ANSWER THIS (Y/n) QUESTION!")
     elif attempt >= 3:
         raise RuntimeError(
-            "I warned you! You failed 3 times to answer a simple (y/n)"
-            " question! Please start over!"
+            "I warned you! You failed 3 times to answer a simple yes/no "
+            "question! Please start over!"
         )
     elif not (answer in pos or answer in neg):
         print(f"That was a yes or no question, but you answered: {answer}")
@@ -496,176 +371,162 @@ def user_response(question, attempt=0):
     return answer in pos
 
 
-def find_all_subdir_in_branch(workflow_branch):
+def collect_files(root, base_root=None):
+    """Collect all files underneath 'root' as
+    paths relative to it. If parameter 'base root'
+    is given, the relative path is computed relative
+    to 'base root'.
+    Skips over default CUBI metadata files.
     """
-    Function to list all subdirectories in the 'template_snakemake' repo
-    to be able to create all missing subfolders that doesn't belong to the
-    ".git/ .
-    """
-    word_to_filter = ".git"
-
-    subfolders = [
-        subdir
-        for subdir in workflow_branch.rglob("*")
-        if subdir.is_dir()
-        if word_to_filter not in subdir.parts
-    ]
-
-    return subfolders
-
-
-def update_file_list(workflow_branch, metadata, dryrun):
-    """
-    Function to create a list of files that will be updated.
-    """
-    files_to_update = []
-
-    # the following files need to be excluded because they are always project specific
-    excluded_files = [
-        "pyproject.toml",
-        "workflow/rules/00_modules.smk",
-        "workflow/rules/99_aggregate.smk",
-    ]
-
-    # create a list of all files in 'template_snakemake' directory without the excluded
-    # files and the '.git' folder
-    workflow_files = []
-    for file in workflow_branch.rglob("*"):
-        if file.is_file():
-            workflow_files.append(str(pathlib.Path(file).relative_to(workflow_branch)))
-            for item in workflow_files[:]:
-                if item in excluded_files or ".git/" in item:
-                    workflow_files.remove(item)
-
-    # I want the 'pyproject.toml' file at the end of the list and therefore I excluded
-    # it initially from the list and now I append it so it will be at the end
-    workflow_files.append("pyproject.toml")
-
-    subfolders = find_all_subdir_in_branch(workflow_branch)
-
-    # metadata files
+    files = set()
+    subdirs = set()
     metadata_files = [
+        "pyproject.toml",
         "CITATION.md",
         "LICENSE",
         ".editorconfig",
+        ".gitignore"
     ]
-    if dryrun:
-        if metadata:
-            files_to_update = [
-                "LICENSE",
-                "workflow/rules/commons/00_commons.smk",
-                "pyproject.toml",
-            ]
-            print(
-                "All workflow files incl. metadata files would be copied/updated!\n"
-                "Only a small selection of files will be used for the dry run!\n"
-            )
+    # these two files would commonly
+    # be adapted in a workflow and are
+    # otherwise empty - just silently skip
+    adapted_workflow_files = [
+        "00_modules.smk",
+        "99_aggregate.smk"
+    ]
+    for item in root.iterdir():
+        if item.name == ".git":
+            continue
+        if item.name in adapted_workflow_files:
+            continue
+        if item.is_dir():
+            subdirs.add(item)
+            continue
+        assert item.is_file()
+        if base_root is None:
+            rel_path = item.relative_to(root)
         else:
-            files_to_update = [
-                "README.md",
-                "workflow/rules/commons/00_commons.smk",
-                "pyproject.toml",
-            ]
-            print(
-                "Just the workflow files without the metadata files would "
-                "be copied/updated!\n"
-                "Only a small selection of files will be used for the dry run!\n"
-            )
+            rel_path = item.relative_to(base_root)
+        if str(rel_path) in metadata_files:
+            continue
+        files.add(rel_path)
+    if subdirs:
+        source_root = root if base_root is None else base_root
+        files = files.union(set(
+            itt.chain.from_iterable(
+                [collect_files(root.joinpath(subdir), source_root) for subdir in subdirs]
+            )))
+    return sorted(files)
+
+
+def main():
+
+    args = parse_command_line()
+    is_dry_run = args.dry_run
+
+    if is_dry_run:
+        print("=== Info: this is a dry run ===")
+
+    print(f"Workflow directory to be updated: {args.workflow_target}\n")
+
+    workflow_template_local = args.workflow_source
+
+    # check if user provided a local path as workflow template repo
+    if pl.Path(workflow_template_local).resolve().is_dir():
+        workflow_template_local = pl.Path(workflow_template_local).resolve()
+        workflow_template_remote = UPD_WF_DEFAULT_TEMPLATE_REPO
+        assert check_is_git_repo(workflow_template_local), \
+            f"Not a git repo: {workflow_template_local}"
+
+    elif workflow_template_local == UPD_WF_DEFAULT_TEMPLATE_REPO:
+        # it's the default...
+        workflow_template_remote = UPD_WF_DEFAULT_TEMPLATE_REPO
+        workflow_template_local = args.workflow_target.parent.joinpath(
+            pl.Path(UPD_WF_DEFAULT_TEMPLATE_REPO).stem
+        )
+        if check_is_git_repo(workflow_template_local):
+            # all good
+            pass
+        elif workflow_template_local.is_dir():
+            raise RuntimeError(f"Path exists, but not a git repo: {workflow_template_local}")
+        else:
+            git_clone_template(workflow_template_remote, workflow_template_local.parent, is_dry_run)
+    elif check_online_resource(workflow_template_local):
+        # least likely case: an online resource / remote repository
+        # that is not the default - ?
+        workflow_template_remote = workflow_template_local
+        workflow_template_local = args.workflow_target.parent.joinpath(
+            pl.Path(workflow_template_remote).stem
+        )
+        git_clone_template(workflow_template_remote, workflow_template_local.parent, is_dry_run)
     else:
-        if metadata:
-            files_to_update = workflow_files
-        else:
-            files_to_update = [
-                item for item in workflow_files if item not in metadata_files
-            ]
-    return files_to_update, subfolders
-
-
-def get_pyproject_versions(workflow_target, workflow_branch):
-    """
-    Read the metadata and workflow version strings in the respective
-    pyproject.toml files from the template branch and target
-    directories.
-
-    Args:
-        workflow_target (pathlib.Path):
-            The folder being processed / receiving the workflow update
-        workflow_branch (pathlib.Path):
-            The branch folder of the update process, i.e., that should
-            almost always refer to 'template-snakefile'
-
-    Returns:
-        Metadata version of the branch (str)
-        Metadata version of the target (str)
-        Workflow version of the branch (str)
-        Workflow version of the target (str)
-        Target pyproject toml w/ updated metadata and workflow version (dict)
-    """
-    # loading the pyproject.tomls:
-    branch_pyproject = toml.load(
-        pathlib.Path(workflow_branch, "pyproject.toml"), _dict=col.OrderedDict
-    )
-    target_pyproject = toml.load(
-        pathlib.Path(workflow_target, "pyproject.toml"), _dict=col.OrderedDict
-    )
-    # extracting the metadata versions:
-    branch_metadata_version = branch_pyproject["cubi"]["metadata"]["version"]
-    target_metadata_version = target_pyproject["cubi"]["metadata"]["version"]
-    # updating the metadata version in the workflow pyproject with the metadata version
-    # from the template_snakemake 'source' pyproject:
-    target_pyproject["cubi"]["metadata"]["version"] = branch_metadata_version
-
-    # extracting the workflow versions:
-    branch_workflow_version=branch_pyproject["cubi"]["workflow"]["template"]["version"]
-    target_workflow_version=target_pyproject["cubi"]["workflow"]["template"]["version"]
-    # updating the workflow version in the workflow pyproject with the workflow version
-    # from the template_snakemake 'source' pyproject:
-    target_pyproject["cubi"]["workflow"]["template"]["version"]=branch_workflow_version
-
-    return (
-        branch_metadata_version,
-        target_metadata_version,
-        branch_workflow_version,
-        target_workflow_version,
-        target_pyproject,
-    )
-
-
-def find_cubi_tools_top_level():
-    """Find the top-level folder of the cubi-tools
-    repository (starting from this script path).
-    """
-    script_path = pathlib.Path(__file__).resolve(strict=True)
-    script_folder = script_path.parent
-
-    cmd = ["git", "rev-parse", "--show-toplevel"]
-    repo_path = sp.check_output(cmd, cwd=script_folder).decode("utf-8").strip()
-    repo_path = pathlib.Path(repo_path)
-    return repo_path
-
-
-def report_script_version():
-    """
-    Read out of the cubi-tools script version out of the 'pyproject.toml'.
-    """
-    cubi_tools_repo = find_cubi_tools_top_level()
-
-    toml_file = cubi_tools_repo.joinpath("pyproject.toml").resolve(strict=True)
-
-    toml_file = toml.load(toml_file, _dict=col.OrderedDict)
-
-    cubi_tools_scripts = toml_file["cubi"]["tools"]["script"]
-    version = None
-    for cubi_tool in cubi_tools_scripts:
-        if cubi_tool["name"] == __prog__:
-            version = cubi_tool["version"]
-    if version is None:
-        raise RuntimeError(
-            "Cannot identify script version from pyproject cubi-tools::scripts "
-            f"entry: {cubi_tools_scripts}"
+        # case: WTF
+        raise ValueError(
+            f"Cannot interpret value for template repository: {workflow_template_local}"
         )
 
-    return version
+    # at this point: guaranteed that the template repo exists locally;
+    # pull/checkout correct branch
+    try:
+        git_checkout_branch_tag(workflow_template_local, args.branch, is_dry_run)
+    except sp.CalledProcessError:
+        # maybe the repo is in detached HEAD state
+        git_checkout_branch_tag(workflow_template_local, args.branch, is_dry_run, skip_pull=True)
+
+    # check if the target workflow is really based on the CUBI template
+    if not check_is_cubi_workflow(args.workflow_target):
+        # one exception: entirely new workflow folder
+        answer_is_pos = user_response(
+            "Workflow folder is either new/uninitilized "
+            "or not based on the official CUBI template. "
+            "Please confirm - proceed with update"
+        )
+        if not answer_is_pos:
+            raise RuntimeError(f"Cannot update target folder: {args.workflow_target}")
+
+    file_update_candidates = collect_files(workflow_template_local)
+    print(f"Identified {len(file_update_candidates)} template files as candidates for updating")
+
+    wf_target = args.workflow_target
+    updated_files = []
+    skipped_files = []
+    for rel_file_path in file_update_candidates:
+        file_updated = update_file(
+            wf_target, workflow_template_local, rel_file_path, is_dry_run
+        )
+        if file_updated:
+            updated_files.append(rel_file_path)
+        else:
+            skipped_files.append(rel_file_path)
+
+    file_updated = update_pyproject_toml(
+        wf_target, workflow_template_local,
+        workflow_template_remote.strip(".git"),
+        updated_files, is_dry_run
+    )
+    if file_updated:
+        updated_files.append("pyproject.toml")
+    else:
+        skipped_files.append("pyproject.toml")
+
+
+    # For 'git pull' you have to be in a branch of the template-snakemake repo to
+    # merge with. If you previously chose a version tag to update from, 'git pull' will
+    # throw a waning message. This part will reset the repo to the main branch to avoid
+    # any warning message stemming from 'git pull'
+    git_checkout_branch_tag(workflow_template_local, "main", is_dry_run, skip_pull=True)
+
+    if is_dry_run:
+        print("Dry run completed")
+        for file_path in file_update_candidates:
+            print(f"File update candidate: {file_path}")
+    else:
+        print("Update completed")
+        print("Updated files:")
+        for file_path in updated_files:
+            print(f"Updated: {file_path}")
+
+    return None
 
 
 if __name__ == "__main__":

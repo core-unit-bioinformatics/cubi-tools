@@ -37,3 +37,8 @@ UPD_MD_DEFAULT_METADATA_FILES = [
     "LICENSE",
     ".editorconfig"
 ]
+
+# ==================
+# for tool ct-upd-wf
+# update workflow
+UPD_WF_DEFAULT_TEMPLATE_REPO = "https://github.com/core-unit-bioinformatics/template-snakemake.git"
