@@ -80,6 +80,18 @@ The script updates all Snakemake template workflow files except for `/workflow/r
 which are assumed to contain workflow-specific modifications, i.e. module includes and result file aggregations. The script updates the template
 workflow files by checking for SHA checksum differences relative to the source repository [template-snakemake](https://github.com/core-unit-bioinformatics/template-snakemake).
 
+# Usage examples
+
+## Initializing a new Snakemake workflow repository
+
+This example specifies the metadata and workflow template versions
+explicitly (latest versions at the time of writing).
+
+```
+$ ct-git --init workflow-smk-foobar --init-preset all
+$ ct-upd-md --target-dir workflow-smk-foobar/ --git-branch v1.6.1
+$ ct-upd-wf --workflow-target workflow-smk-foobar/ --branch v1.4.0
+```
 
 # Citation
 
