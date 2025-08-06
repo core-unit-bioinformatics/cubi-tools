@@ -664,21 +664,17 @@ def report_script_version():
         # with the python standard library alone
         return "undefined"
 
-    cubi_tools_repo = find_cubi_tools_top_level()
-
-    toml_file = cubi_tools_repo.joinpath("pyproject.toml").resolve(strict=True)
-
-    toml_file = toml.load(toml_file, _dict=dict)
-    cubi_tools_scripts = toml_file["cubi"]["tools"]["script"]
-    version = None
-    for cubi_tool in cubi_tools_scripts:
-        if cubi_tool["name"] == __prog__:
-            version = cubi_tool["version"]
-    if version is None:
-        raise RuntimeError(
-            f"Cannot identify script version from pyproject cubi-tools::scripts entry: {cubi_tools_scripts}"
-        )
-    return version
+    # below:
+    # prep this script also to become a regular part
+    # of the cubitools package and read version from
+    # there. Docs advertise this script still as possible
+    # standalone exec, so except this case here.
+    try:
+        from cubitools import __version__
+    except ImportError:
+        return "undefined"
+    else:
+        return __version__
 
 
 def main():
