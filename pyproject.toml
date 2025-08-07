@@ -43,25 +43,9 @@ where=["src"]
 
 [tool.setuptools_scm]
 
-[cubi.tools]
-pid = "https://github.com/core-unit-bioinformatics/cubi-tools"
-version = "prototype"
-
-[[cubi.tools.script]]
-name = "update-metadata.py"
-
-[[cubi.tools.script]]
-name = "update-workflow.py"
-
-[[cubi.tools.script]]
-name = "cluster-info.py"
-
-[[cubi.tools.script]]
-name = "auto-git.py"
-
 [cubi.metadata]
 pid = "https://github.com/core-unit-bioinformatics/template-metadata-files"
-version = "1.5.0"
+version = "1.7.0"
 
 [tool.black]
 line-length = 88
@@ -74,3 +58,19 @@ max-line-length = "88"
 
 [tool.pylint.messages_control]
 disable = [ "logging-fstring-interpolation", "useless-return", "missing-module-docstring",]
+
+[tool.ruff]
+line-length = 88
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.format]
+line-ending = "lf"
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = []
+unfixable = ["B"]
