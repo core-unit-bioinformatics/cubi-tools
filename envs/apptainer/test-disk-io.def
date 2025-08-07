@@ -1,0 +1,9 @@
+Bootstrap: docker
+From: ubuntu:24.04
+
+%files
+    ../cubi-tools/prototypes/test-disk-io.py    /usr/local/bin
+
+%post
+    apt update
+    apt install -y python3
