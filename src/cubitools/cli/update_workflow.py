@@ -106,14 +106,40 @@ def check_is_git_repo(path):
 
 
 def check_is_cubi_workflow(path):
+    """check_is_cubi_workflow
+    This function checks if the target
+    dir is based on the CUBI workflow
+    template by checking the presence of
+    the two indicator files constants
+    and modules. Supports both old and
+    new workflow templates:
+    old - v1.4.0 and older
+    new - v1.5.0 and newer
 
-    constants_exist = path.joinpath(
+    Args:
+        path (_type_): _description_
+
+    Returns:
+        bool: true if templated Snakemake workflow
+    """
+    # check old / v1.4.0 and older
+    old_constants_exist = path.joinpath(
         "workflow", "rules", "commons", "10_constants.smk"
+    ).is_file()
+
+    # check new
+    new_constants_exist = path.joinpath(
+        "workflow", "rules", "commons", "10-constants"
     ).is_dir()
+
     modules_exist = path.joinpath(
         "workflow", "rules", "00_modules.smk"
-    ).is_dir()
-    return constants_exist and modules_exist
+    ).is_file()
+
+    is_old_template = old_constants_exist and modules_exist
+    is_new_template = new_constants_exist and modules_exist
+
+    return is_old_template or is_new_template
 
 
 def print_dry_run_info(system_call, work_folder=None):
