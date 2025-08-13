@@ -265,6 +265,29 @@ def update_file(workflow_target, workflow_template, file_to_update, is_dry_run):
     target_file_path = workflow_target.joinpath(file_to_update)
     source_md5 = calculate_md5_checksum(source_file_path)
     target_md5 = calculate_md5_checksum(target_file_path)
+
+    # these two files would commonly
+    # be adapted in a workflow and are
+    # otherwise empty - just skip
+    # if they already exist
+    adapted_workflow_files = [
+        "00_modules.smk",
+        "99_aggregate.smk"
+    ]
+    if target_file_path.name in adapted_workflow_files:
+        # note that the template also contains other
+        # aggregate files such as 99-testing/99_aggregate.smk
+        # and other may be added in the future. So check
+        # that this is the main aggregate file and only
+        # update if it does not exist.
+
+        target_file_exists = target_file_path.is_file()
+        is_main_template_file = target_file_path.parent == "rules"
+
+        if target_file_exists and is_main_template_file:
+            # just skip over it
+            return False
+
     if not target_md5:
         target_md5 = "(non-existing)"
 
@@ -413,17 +436,8 @@ def collect_files(root, base_root=None):
         ".editorconfig",
         ".gitignore"
     ]
-    # these two files would commonly
-    # be adapted in a workflow and are
-    # otherwise empty - just silently skip
-    adapted_workflow_files = [
-        "00_modules.smk",
-        "99_aggregate.smk"
-    ]
     for item in root.iterdir():
         if item.name == ".git":
-            continue
-        if item.name in adapted_workflow_files:
             continue
         if item.is_dir():
             subdirs.add(item)
