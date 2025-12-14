@@ -1,29 +1,25 @@
-#!/usr/bin/env python3
 
-import argparse as argp
 import collections as col
 import pathlib as pl
 import subprocess as sp
 import sys
 
-from cubitools import __prog__, __license__, __version__
-from cubitools import __cubitools__
-from cubitools.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
+# TODO - deprecated / legacy
+from cubitools.commons.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
+from cubitools.commons import CT_ENV
 
 
-def parse_command_line():
+def get_subcommand_parser(subparsers):
 
-    parser = argp.ArgumentParser(
-        prog=__prog__,
-        epilog=__cubitools__
-    )
+    subcmd_name = "git"
+    subcmd_desc = (
+            "CUBI-Tools subcommand to initialize, clone or "
+            "normalize git repositories following CUBI standards."
+        )
 
-    parser.add_argument(
-        "--version",
-        "-v",
-        action="version",
-        version=__version__,
-        help="Show version and exit.",
+    parser = subparsers.add_parser(
+        subcmd_name,
+        description=subcmd_desc,
     )
 
     parser.add_argument(
@@ -135,38 +131,10 @@ def parse_command_line():
         dest="quiet",
         help="If set, do not print usage hints at the end."
     )
-    args = parser.parse_args()
 
-    if not args.no_user_config:
-        cubi_cfg_dir = check_cubi_config_dir(args.cubi_config_dir)
-        setattr(args, "cubi_config_dir", cubi_cfg_dir)
+    parser.set_defaults(exec=exec_git_module)
 
-    if args.init is not None and args.init_preset == "githhu":
-        setattr(args, "no_all", True)
-
-    # change in response to gh#27
-    if args.init is not None and args.init_preset == "github":
-        if not getattr(args, "no_all"):
-            err_msg = (
-                "You selected the init preset 'github' with the virtual "
-                "'all' remote.\nThis probably does not make sense because "
-                "the CUBI development guidelines state that (standard) "
-                "repositories have to exist both on github and on gitlab/HHU.\n"
-                "If you are sure you are doing the right thing, please "
-                "explicitly set the option '--no-all-target' together with "
-                "the 'github' preset."
-            )
-            raise ValueError(err_msg)
-
-    # change in response to gh#27
-    if args.init is not None and args.init_preset == "all":
-        if getattr(args, "no_all"):
-            raise ValueError("Cannot combine init preset 'all' with option '--no-all-target'")
-        # under the hood, just reset the init preset to 'github'
-        # if the user selected 'all', which is the default behavior.
-        setattr(args, "init_preset", "github")
-
-    return args
+    return subcmd_name, subcmd_desc
 
 
 def check_git_identity_files(config_dir):
@@ -414,8 +382,41 @@ def init_git(args):
     return git_infos, repo_wd
 
 
-def main():
-    args = parse_command_line()
+def exec_git_module(args):
+
+    # TODO - this is a temp solution to
+    # allow for the module-level splitting
+    # into subparser; rework that
+    if not args.no_user_config:
+        cubi_cfg_dir = check_cubi_config_dir(args.cubi_config_dir)
+        setattr(args, "cubi_config_dir", cubi_cfg_dir)
+
+    if args.init is not None and args.init_preset == "githhu":
+        setattr(args, "no_all", True)
+
+    # change in response to gh#27
+    if args.init is not None and args.init_preset == "github":
+        if not getattr(args, "no_all"):
+            err_msg = (
+                "You selected the init preset 'github' with the virtual "
+                "'all' remote.\nThis probably does not make sense because "
+                "the CUBI development guidelines state that (standard) "
+                "repositories have to exist both on github and on gitlab/HHU.\n"
+                "If you are sure you are doing the right thing, please "
+                "explicitly set the option '--no-all-target' together with "
+                "the 'github' preset."
+            )
+            raise ValueError(err_msg)
+
+    # change in response to gh#27
+    if args.init is not None and args.init_preset == "all":
+        if getattr(args, "no_all"):
+            raise ValueError("Cannot combine init preset 'all' with option '--no-all-target'")
+        # under the hood, just reset the init preset to 'github'
+        # if the user selected 'all', which is the default behavior.
+        setattr(args, "init_preset", "github")
+
+
     wd = pl.Path(".").resolve()
     if args.clone is not None:
         git_infos, wd = clone_git(args, wd)
@@ -454,4 +455,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise RuntimeError("Not executable as standalone script")

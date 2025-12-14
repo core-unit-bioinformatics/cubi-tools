@@ -1,6 +1,35 @@
 import collections
+import dataclasses as dcl
 import pathlib
 
+
+@dcl.dataclass(frozen=True)
+class RuntimeConstants:
+    timestamp_format: str = "%Y%m%dT%H%M%S"
+    file_encoding: str = "utf-8"
+    log_file_name: str = "ct-run.log"
+    env_file_name: str = "ct-env.toml"
+    cfg_file_name: str = "ct-cfg.toml"
+    ct_subdir: str = "cubi-tools"
+    # following: some important env keys
+    # plus default values as recommended in
+    # specifications.freedesktop.org/basedir/latest
+    xdg_data_home: str = "XDG_DATA_HOME"
+    data_default: str = "{USERHOME}/.local/share"
+    xdg_config_home: str = "XDG_CONFIG_HOME"
+    config_default: str = "{USERHOME}/.config"
+    xdg_state_home: str = "XDG_STATE_HOME"
+    state_default: str = "{USERHOME}/.local/state"
+    xdg_cache_home: str = "XDG_CACHE_HOME"
+    cache_default: str = "{USERHOME}/.cache"
+    cubi_tools_env: str = "CUBI_TOOLS_ENV"
+
+
+RUNTIME_CONSTANTS = RuntimeConstants()
+
+
+# === TODO
+# all below: deprecated / legacy
 
 DEFAULT_WORKING_DIR = pathlib.Path(".").resolve(strict=True)
 
