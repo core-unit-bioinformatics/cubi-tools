@@ -1,16 +1,30 @@
 import dataclasses as dcl
 import getpass
+import logging
 import os
 import pathlib as pl
 import socket
 
 import toml
 
-from cubitools.commons.constants import RUNTIME_CONSTANTS
+from cubitools import __debug_run__
+from cubitools.commons.constants import CUBITOOLS_CONSTANTS as CT_CONST
+from cubitools.commons.constants import __STRUCT_INIT_LOG_HANDLER
+
+
+# see explanation in commons::constants.py
+LOGGER_NAME = f"STRUCTINIT::{__name__}"
+LOGGER = logging.getLogger(LOGGER_NAME)
+LOGGER.addHandler(__STRUCT_INIT_LOG_HANDLER)
+if __debug_run__:
+    LOGGER.setLevel(logging.DEBUG)
+else:
+    LOGGER.setLevel(logging.WARNING)
 
 
 @dcl.dataclass(frozen=True)
 class CubiToolsEnv:
+    path: str
     user_home: pl.Path
     user_name: str
     host_name: str
@@ -23,10 +37,12 @@ class CubiToolsEnv:
 
 
 class CubiToolsEnvBuilder:
-    """
-    """
-    def __init__(self):
+
+    __slots__ = ["user_home", "logger"]
+
+    def __init__(self, logger):
         self.user_home = pl.Path.home().resolve(strict=True)
+        self.logger = logger
         return None
 
     def build_environment(self):
@@ -34,32 +50,34 @@ class CubiToolsEnvBuilder:
         custom_env, loaded_env = self._check_custom_env(os_env)
         if custom_env is not None:
             loaded_env["env_file"] = custom_env
+            loaded_env["path"] = os_env["PATH"]
             ct_env = CubiToolsEnv(**loaded_env)
         else:
             ct_env = dict()
+            ct_env["path"] = os_env["PATH"]
             self._collect_user_info(ct_env)
 
             fmt = {"USERHOME": self.user_home}
             ct_env["config_dir"] = self._set_env_dir(
-                os_env, RUNTIME_CONSTANTS.xdg_config_home,
-                RUNTIME_CONSTANTS.config_default.format(**fmt),
+                os_env, CT_CONST.xdg_config_home,
+                CT_CONST.config_default.format(**fmt),
             )
             ct_env["state_dir"] = self._set_env_dir(
-                os_env, RUNTIME_CONSTANTS.xdg_state_home,
-                RUNTIME_CONSTANTS.state_default.format(**fmt),
+                os_env, CT_CONST.xdg_state_home,
+                CT_CONST.state_default.format(**fmt),
             )
             ct_env["cache_dir"] = self._set_env_dir(
-                os_env, RUNTIME_CONSTANTS.xdg_cache_home,
-                RUNTIME_CONSTANTS.cache_default.format(**fmt),
+                os_env, CT_CONST.xdg_cache_home,
+                CT_CONST.cache_default.format(**fmt),
             )
             ct_env["env_file"] = ct_env["state_dir"].joinpath(
-                RUNTIME_CONSTANTS.env_file_name
+                CT_CONST.env_file_name
             )
             ct_env["cfg_file"] = ct_env["config_dir"].joinpath(
-                RUNTIME_CONSTANTS.cfg_file_name
+                CT_CONST.cfg_file_name
             )
             ct_env["log_file"] = ct_env["state_dir"].joinpath(
-                RUNTIME_CONSTANTS.log_file_name
+                CT_CONST.log_file_name
             )
             ct_env = CubiToolsEnv(**ct_env)
         self._dump_env_file(ct_env)
@@ -68,13 +86,14 @@ class CubiToolsEnvBuilder:
     def _check_custom_env(self, os_env):
         try:
             custom_env = pl.Path(
-                os_env[RUNTIME_CONSTANTS.cubi_tools_env]
+                os_env[CT_CONST.cubi_tools_env]
             ).resolve(strict=True)
         except (KeyError, FileNotFoundError):
             custom_env = None
             loaded_env = dict()
         else:
-            with open(custom_env, "r") as cfg_dump:
+            _file_enc = CT_CONST.default_text_encoding
+            with open(custom_env, "r", encoding=_file_enc) as cfg_dump:
                 plain_values = toml.load(cfg_dump)
             loaded_env = dict()
             for key, value in plain_values.items():
@@ -91,7 +110,8 @@ class CubiToolsEnvBuilder:
         simple_env = dict(
             (k, str(v)) for k, v in dcl.asdict(ct_env).items()
         )
-        with open(ct_env.env_file, "w") as env_dump:
+        _file_enc = CT_CONST.default_text_encoding
+        with open(ct_env.env_file, "w", encoding=_file_enc) as env_dump:
             toml.dump(simple_env, env_dump)
         return
 
@@ -107,8 +127,11 @@ class CubiToolsEnvBuilder:
         except KeyError:
             system_dir = None
         if system_dir is not None and system_dir.is_dir():
-            ct_env_dir = system_dir.joinpath(RUNTIME_CONSTANTS.ct_subdir)
+            ct_env_dir = system_dir.joinpath(CT_CONST.ct_subdir)
         else:
-            ct_env_dir = pl.Path(dir_default).joinpath(RUNTIME_CONSTANTS.ct_subdir)
+            ct_env_dir = pl.Path(dir_default).joinpath(CT_CONST.ct_subdir)
         ct_env_dir.mkdir(exist_ok=True, parents=True)
         return ct_env_dir
+
+
+CUBITOOLS_ENVIRONMENT = CubiToolsEnvBuilder(LOGGER).build_environment()

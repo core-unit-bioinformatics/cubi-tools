@@ -4,9 +4,19 @@ import pathlib as pl
 import subprocess as sp
 import sys
 
+from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
+from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
+from cubitools.commons.io_path import IOPath
+import cubitools.commons.logging as ctlog
+import cubitools.commons.syscall as syscall
+import cubitools.modules.git.config as gitconfig
+
 # TODO - deprecated / legacy
 from cubitools.commons.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
-from cubitools.commons import CT_ENV
+
+
+LOGGER_NAME = __name__
+LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
 
 
 def get_subcommand_parser(subparsers):
@@ -22,21 +32,9 @@ def get_subcommand_parser(subparsers):
         description=subcmd_desc,
     )
 
-    parser.add_argument(
-        "--working-dir", "--root", "-wd", "-w",
-        type=lambda path: pl.Path(path).resolve(strict=True),
-        default=DEFAULT_WORKING_DIR,
-        dest="working_dir",
-        help=(
-            "Default working / root directory of operations. "
-            f"Default: {DEFAULT_WORKING_DIR}"
-        )
-    )
-
     mutex = parser.add_mutually_exclusive_group(required=True)
     mutex.add_argument(
-        "--clone",
-        "-c",
+        "--clone", "-c",
         type=str,
         default=None,
         dest="clone",
@@ -46,89 +44,48 @@ def get_subcommand_parser(subparsers):
         )
     )
     mutex.add_argument(
-        "--init",
-        "-i",
-        type=lambda x: pl.Path(x).resolve(strict=False),
+        "--init", "-i",
+        type=IOPath.output_dir,
         default=None,
         dest="init",
         help=(
             "Path to the new repository to initialize. "
-            "Example: auto_git.py --init PATH-TO-NEW-REPO [must not exist] --init-preset PRESET"
+            "Example: "
+            "cubitools git --init PATH-TO-NEW-REPO [must not exist] --git-preset PRESET"
         )
     )
     mutex.add_argument(
         "--norm",
         "-n",
-        type=lambda x: pl.Path(x).resolve(strict=True),
+        type=IOPath.input_dir,
         default=None,
         dest="norm",
         help=(
-            "Normalize git remotes for existing repositories. "
-            "Example: auto_git.py --norm PATH-TO-EXISTING-REPO"
+            "Normalize git remotes and user for existing repositories. "
+            "Example: "
+            "cubitools git --norm PATH-TO-EXISTING-REPO --git-preset PRESET"
         )
     )
+
     parser.add_argument(
-        "--init-preset",
-        "-ip",
+        "--git-preset",
+        "-gp",
         type=str,
-        choices=["github", "githhu", "all"],
-        default="githhu",
+        choices=CT_CONFIG.get_git_preset_names(),
+        default=None,
         dest="init_preset",
-        help="Preset for git init operation: github / githhu / all [both remotes]",
-    )
-    parser.add_argument(
-        "--dry-run",
-        "--dryrun",
-        "-dry",
-        "-d",
-        action="store_true",
-        dest="dryrun",
-        default=False,
-        help="Just print what you would do, but don't do it",
-    )
-
-    parser.add_argument(
-        "--cubi-tools-config", "--ct-config", "-cfg",
-        "--git-identities", "-g",
-        type=lambda x: pl.Path(x).resolve(strict=True),
-        dest="cubi_config_dir",
-        default=DEFAULT_CUBITOOLS_CONFIG_DIR[0],
         help=(
-            "Path to CUBI tools configuration folder. "
-            "For this tool, this folder contains the "
-            "git identity files for all git remotes. "
-            "See README for details; in brief, an identity file for a "
-            "remote is a 2-line text file stating the "
-            "(1) author name and (2) email. "
-            f"Default - any of the following:  {DEFAULT_CUBITOOLS_CONFIG_DIR}"
+            "Preset for git operations that set or change git remotes. "
+            "Git presets can be configured in the CUBI-Tools configuration "
+            f"file: {CT_ENV.cfg_file}"
         )
     )
 
     parser.add_argument(
-        "--no-user-config",
-        "--no-cfg",
-        "-noc",
+        "--no-usage-hints", "-noh",
         action="store_true",
         default=False,
-        dest="no_user_config",
-        help="Do not configure user name and email for git repository. Default: False",
-    )
-
-    parser.add_argument(
-        "--no-all-target",
-        "--no-all",
-        "-noa",
-        action="store_true",
-        default=False,
-        dest="no_all",
-        help="Do not configure multiple push targets / do not add virtual 'all' remote. Default: False",
-    )
-
-    parser.add_argument(
-        "--quiet", "-q",
-        action="store_true",
-        default=False,
-        dest="quiet",
+        dest="no_usage_hints",
         help="If set, do not print usage hints at the end."
     )
 
@@ -176,14 +133,21 @@ def check_cubi_config_dir(user_set_dir):
 
     cubi_cfg_dir = None
     if not user_set_dir.is_dir():
-        for directory in DEFAULT_CUBITOOLS_CONFIG_DIR:
-            if directory.is_dir():
-                cubi_cfg_dir = directory
-                break
-        if cubi_cfg_dir is None:
-            cubi_cfg_dir = DEFAULT_CUBITOOLS_CONFIG_DIR[0]
-            cubi_cfg_dir.mkdir(parents=True)
+        # if the option is left unchanged,
+        # this is the default because the
+        # CT_ENV.config_dir already exists
+        # at this point
+        cubi_cfg_dir = CT_ENV.config_dir
     else:
+        # the user redirected to some
+        # non-default location; that is
+        # deprecated behavior
+        msg = (
+            "DEPRECATION WARNING: cubi tools config "
+            "dir is set to non-default location: "
+            f"{user_set_dir}"
+        )
+        LOGGER.warning(msg)
         cubi_cfg_dir = user_set_dir
 
     missing_id_files = check_git_identity_files(cubi_cfg_dir)
@@ -384,12 +348,14 @@ def init_git(args):
 
 def exec_git_module(args):
 
-    # TODO - this is a temp solution to
-    # allow for the module-level splitting
-    # into subparser; rework that
-    if not args.no_user_config:
-        cubi_cfg_dir = check_cubi_config_dir(args.cubi_config_dir)
-        setattr(args, "cubi_config_dir", cubi_cfg_dir)
+    LOGGER.set_debug_logging(args.debug)
+    CT_CONFIG.set_logger(LOGGER)
+
+    gitconfig.build_git_config()
+
+    git_exec = syscall.SysCallInterface(executable="git", logger=LOGGER)
+
+    raise RuntimeError("horrible crash in git")
 
     if args.init is not None and args.init_preset == "githhu":
         setattr(args, "no_all", True)

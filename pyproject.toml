@@ -30,6 +30,7 @@ repository = "https://github.com/core-unit-bioinformatics/cubi-tools"
 
 [project.scripts]
 cubitools = "cubitools.cli.__main__:run_app"
+cbt = "cubitools.cli.__main__:run_app"
 qbt = "cubitools.cli.__main__:run_app"
 ct-hpc = "cubitools.cli.cluster_info:main"
 ct-upd-wf = "cubitools.cli.update_workflow:main"

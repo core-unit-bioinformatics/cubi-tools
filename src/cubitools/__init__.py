@@ -1,4 +1,6 @@
 import importlib.metadata as impmd
+import logging
+import os
 import pathlib as pl
 import sys
 
@@ -12,3 +14,11 @@ try:
 except impmd.PackageNotFoundError:
     # package is not installed
     raise
+
+
+try:
+    __debug_run__ = dict(os.environ)["CT_DEV_DEBUG"] == "1"
+except KeyError:
+    __debug_run__ = False
+
+

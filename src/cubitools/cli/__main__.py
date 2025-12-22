@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse as argp
+import logging
 
 from cubitools import __prog__, __usage__, \
     __version__, __cubitools__
 import cubitools.cli.subparsers as subcmd
 import cubitools.commons.logging as ctlog
+
+
+LOGGER_NAME = "main"
 
 
 def setup_cli_parser():
@@ -21,6 +25,14 @@ def setup_cli_parser():
     general_args = parser.add_argument_group(title="General parameters")
 
     general_args.add_argument(
+        "--dry-run", "-d", "-dry",
+        action="store_true",
+        default=False,
+        dest="dry_run",
+        help="Explain actions but do not execute them."
+    )
+
+    general_args.add_argument(
         "--version", "-v",
         action="version",
         version=f"{__prog__} {__version__}",
@@ -28,7 +40,7 @@ def setup_cli_parser():
     )
 
     general_args.add_argument(
-        "--debug", "-d", "-dbg",
+        "--debug", "-dbg",
         action="store_true",
         default=False,
         dest="debug",
@@ -61,8 +73,6 @@ def setup_cli_parser():
 
 def run_app():
 
-    exit_code = 0
-
     main_parser = setup_cli_parser()
     try:
         args = main_parser.parse_args()
@@ -73,26 +83,19 @@ def run_app():
         main_parser.print_help()
         raise
 
-    run_logger_name = "run"
-    if args.subcommand is None:
-        pass
-    else:
-        run_logger_name += f"-{args.subcommand}"
-
-    run_logger = ctlog.get_run_logger(run_logger_name, args.debug)
-    run_logger.debug(f"Logger name: {run_logger_name}")
+    logger = ctlog.CubiToolsLogger("main", args.debug)
+    logger.debug("Logger setup complete - deferring to subcommand")
 
     try:
-        # this relies on
-        # 'parser.set_defaults(exec=<main-module-exec-function>)'
-        # in the respective sub-modules
-        main_parser.exec(args, run_logger)
-    except AttributeError:
-        # this means no subcommand was selected, print help/usage
-        main_parser.print_help()
-        exit_code = 2
+        args.exec(args)
+    except Exception as err:
+        logger.critical()
+        raise err
 
-    return exit_code
+    logger.debug("Back in main - exiting...")
+    logging.shutdown()
+
+    return 0
 
 
 if __name__ == "__main__":
