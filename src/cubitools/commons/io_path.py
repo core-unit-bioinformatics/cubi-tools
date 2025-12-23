@@ -33,3 +33,4 @@ class IOPath:
         p = pl.Path(path).resolve(strict=False)
         if p.is_file():
             raise TypeError(f"Output path points to file: {path}")
+        return p

@@ -27,13 +27,14 @@ class CubiToolsLogger:
             "than 'main'."
         )
         self._init_run_logger(run_logger_name, debug)
-        if run_logger_name == "main":
+        no_user_logger = run_logger_name == "main" or "STRUCTINIT" in run_logger_name
+        if no_user_logger:
             self.user_logger = None
         else:
             self._init_user_logger()
 
         assert self.run_logger is not None
-        if run_logger_name != "main":
+        if not no_user_logger:
             assert self.user_logger is not None
 
         return None
@@ -102,9 +103,12 @@ class CubiToolsLogger:
         stdout_stream_handler.setLevel(logging.INFO)
         stdout_stream_handler.setFormatter(stdout_console_formatter)
 
-        self.user_logger = logging.getLogger("user")
-        self.user_logger.setLevel(logging.INFO)
-        self.user_logger.addHandler(stdout_stream_handler)
+        if "user" in logging.root.manager.loggerDict:
+            self.user_logger = logging.getLogger("user")
+        else:
+            self.user_logger = logging.getLogger("user")
+            self.user_logger.setLevel(logging.INFO)
+            self.user_logger.addHandler(stdout_stream_handler)
 
         return None
 
@@ -164,10 +168,12 @@ class CubiToolsLogger:
                 continue
             if not line.strip():
                 continue
+            if line.startswith("^^^"):
+                continue
             line_num += 1
             log_lines.append(
                 f"[trbL:{line_num}] {line.strip()}"
             )
-        log_lines = " /// ".join(log_lines)
+        log_lines = " /// ".join(log_lines) + "\n"
         self._system(log_lines, logging.CRITICAL)
         return None

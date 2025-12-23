@@ -8,8 +8,8 @@ from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
 from cubitools.commons.io_path import IOPath
 import cubitools.commons.logging as ctlog
-import cubitools.commons.syscall as syscall
 import cubitools.modules.git.config as gitconfig
+import cubitools.modules.git.structs as gitstructs
 
 # TODO - deprecated / legacy
 from cubitools.commons.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
@@ -32,17 +32,8 @@ def get_subcommand_parser(subparsers):
         description=subcmd_desc,
     )
 
-    mutex = parser.add_mutually_exclusive_group(required=True)
-    mutex.add_argument(
-        "--clone", "-c",
-        type=str,
-        default=None,
-        dest="clone",
-        help=(
-            "Full (remote) git path to clone in the form of: git@<remote>:<user-or-org>/<repo>.git "
-            "Example: auto_git.py --clone git@github.com:core-unit-bioinformatics/cubi-tools.git"
-        )
-    )
+    mutex = parser.add_mutually_exclusive_group(required=False)
+
     mutex.add_argument(
         "--init", "-i",
         type=IOPath.output_dir,
@@ -54,6 +45,7 @@ def get_subcommand_parser(subparsers):
             "cubitools git --init PATH-TO-NEW-REPO [must not exist] --git-preset PRESET"
         )
     )
+
     mutex.add_argument(
         "--norm",
         "-n",
@@ -67,18 +59,29 @@ def get_subcommand_parser(subparsers):
         )
     )
 
+    mutex.add_argument(
+        "--clone", "-c",
+        type=str,
+        default=None,
+        dest="clone",
+        help=(
+            "Full (remote) git path to clone in the form of: git@<remote>:<user-or-org>/<repo>.git "
+            "Example: auto_git.py --clone git@github.com:core-unit-bioinformatics/cubi-tools.git"
+        )
+    )
+
     parser.add_argument(
         "--git-preset",
         "-gp",
         type=str,
         choices=CT_CONFIG.get_git_preset_names(),
-        default=None,
-        dest="init_preset",
+        dest="git_preset",
         help=(
             "Preset for git operations that set or change git remotes. "
             "Git presets can be configured in the CUBI-Tools configuration "
             f"file: {CT_ENV.cfg_file}"
-        )
+        ),
+        required=True
     )
 
     parser.add_argument(
@@ -86,7 +89,7 @@ def get_subcommand_parser(subparsers):
         action="store_true",
         default=False,
         dest="no_usage_hints",
-        help="If set, do not print usage hints at the end."
+        help="If set, do not print usage hints to stdout at the end."
     )
 
     parser.set_defaults(exec=exec_git_module)
@@ -353,59 +356,38 @@ def exec_git_module(args):
 
     gitconfig.build_git_config()
 
-    git_exec = syscall.SysCallInterface(executable="git", logger=LOGGER)
-
-    raise RuntimeError("horrible crash in git")
-
-    if args.init is not None and args.init_preset == "githhu":
-        setattr(args, "no_all", True)
-
-    # change in response to gh#27
-    if args.init is not None and args.init_preset == "github":
-        if not getattr(args, "no_all"):
-            err_msg = (
-                "You selected the init preset 'github' with the virtual "
-                "'all' remote.\nThis probably does not make sense because "
-                "the CUBI development guidelines state that (standard) "
-                "repositories have to exist both on github and on gitlab/HHU.\n"
-                "If you are sure you are doing the right thing, please "
-                "explicitly set the option '--no-all-target' together with "
-                "the 'github' preset."
-            )
-            raise ValueError(err_msg)
-
-    # change in response to gh#27
-    if args.init is not None and args.init_preset == "all":
-        if getattr(args, "no_all"):
-            raise ValueError("Cannot combine init preset 'all' with option '--no-all-target'")
-        # under the hood, just reset the init preset to 'github'
-        # if the user selected 'all', which is the default behavior.
-        setattr(args, "init_preset", "github")
-
-
-    wd = pl.Path(".").resolve()
-    if args.clone is not None:
-        git_infos, wd = clone_git(args, wd)
-    elif args.init is not None:
-        git_infos, wd = init_git(args)
+    if args.init is not None:
+        repo = gitstructs.GitRepository(
+            args.init,
+            CT_CONFIG.git_presets[args.git_preset],
+            args.dry_run, logger=LOGGER
+        )
+        repo.init_repo()
     elif args.norm is not None:
-        assert args.norm.joinpath(".git").is_dir()
-        git_infos, wd = norm_git(args)
+        repo = gitstructs.GitRepository(
+            args.norm,
+            CT_CONFIG.git_presets[args.git_preset],
+            args.dry_run, logger=LOGGER
+        )
+        repo.norm_repo()
     else:
         raise ValueError("No action specified")
 
-    if not args.no_all:
-        set_push_targets(git_infos, wd, args.dryrun)
-    if not args.no_user_config:
-        set_git_identity(git_infos, wd, args.cubi_config_dir, args.dryrun)
+    # if args.clone is not None:
+    #     git_infos, wd = clone_git(args, wd)
+    # elif args.norm is not None:
+    #     assert args.norm.joinpath(".git").is_dir()
+    #     git_infos, wd = norm_git(args)
+    # else:
 
-    if not args.quiet:
+
+    if not args.no_usage_hints:
         hints = (
-            "\n=====\n"
+            "\n\n=====\n"
             "Usage hints:\n"
             "(1) If you just configured a new repo involving the GitHub remote,\n"
             "do not forget to create an empty repo with the same name on github.com\n"
-            "to be able to push the new repo.\n"
+            "to be able to push the new repo to the remote.\n"
             "(2) If you just configured a new repo or created a new branch w/o\n"
             "counterpart in the remote(s), remeber to 'push' with the option\n"
             "'-u/--set-upstream' for every new (!) branch:\n"
@@ -413,9 +395,10 @@ def exec_git_module(args):
             "For example:\n"
             "git push -u all main\n"
             "git push -u github dev\n"
-            "=====\n"
+            "=====\n\n"
         )
-        print(hints)
+        LOGGER.debug("Dumping usage hints to stdout...")
+        sys.stdout.write(hints)
 
     return 0
 

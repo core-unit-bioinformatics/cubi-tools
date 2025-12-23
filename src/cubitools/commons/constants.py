@@ -10,8 +10,8 @@ from cubitools import __debug_run__
 @dcl.dataclass(frozen=True)
 class CubiToolsConstants:
     timestamp_format: str = "%Y%m%dT%H%M%S"
-    log_fmt_stderr: str = "{asctime} - {levelname} - {name}: {message}"
-    log_fmt_stdout: str = "{asctime} - {levelname}: {message}"
+    log_fmt_stderr: str = "{asctime}.{name}.{levelname}: {message}"
+    log_fmt_stdout: str = "{asctime}.{name}.{levelname}: {message}"
     log_fmt_file: str = "{asctime}\t{name}\t{levelname}\t{message}"
     log_fmt_style: typing.Literal["{", "%", "$"] = "{"
     default_text_encoding: str = "utf-8"

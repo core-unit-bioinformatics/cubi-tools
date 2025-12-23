@@ -12,10 +12,11 @@ from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 
 class SysCallInterface:
 
-    def __init__(self, working_dir=None, executable=None, logger=None):
+    def __init__(self, working_dir=None, executable=None, dry_run=False, logger=None):
 
         self._compute_object_id()
         self.logger = logger
+        self.dry_run = dry_run
         self.wd = pl.Path(".").resolve(strict=True)
         if working_dir is not None:
             self.set_wd(working_dir)
@@ -67,19 +68,31 @@ class SysCallInterface:
             return None
         cmd_str = " ".join(command)
         self.logger.tell_user(f"=== SysCallInterface {self._id} DRY RUN info ===")
-        self.logger.tell_user(f"Current path: {CT_ENV.path}")
-        self.logger.tell_user(f"My working directory: {self.wd}")
-        self.logger.tell_user(f"Command: {cmd_str}")
+        #self.logger.tell_user(f"Current $PATH: {CT_ENV.path}")
+        self.logger.tell_user(f"WD: {self.wd}")
+        self.logger.tell_user(f"CMD: {cmd_str}")
         return None
 
-    def run(self, command: list[str], dry_run: bool=False) -> tuple[str, str]:
+    def run(self, command: list[str], force_exec: bool = False) -> tuple[str, str]:
+        """run _summary_
+
+        Args:
+            command (list[str]): _description_
+            force_exec (bool, optional): _description_. Defaults to False.
+
+        Raises:
+            subprocess.CalledProcessError: _description_
+
+        Returns:
+            tuple[str, str]: _description_
+        """
 
         if self.exec is not None:
             _short_form = pl.Path(self.exec).name
             if command[0] not in [self.exec, _short_form]:
                 command = [self.exec] + command
         out, err = "", ""
-        if dry_run:
+        if self.dry_run and not force_exec:
             self._present_dry_run_info(command)
         else:
             try:
@@ -108,8 +121,11 @@ class SysCallInterface:
 
     def set_wd(self, working_dir: str | pl.Path) -> None:
 
-        wd_path = pl.Path(working_dir).resolve(strict=True)
-        if not wd_path.is_dir():
+        wd_path = pl.Path(working_dir).resolve(strict=(not self.dry_run))
+        if wd_path.is_dir() or self.dry_run:
+            # accept that wd_path may not exist
+            pass
+        else:
             raise TypeError(
                 f"Working directory path is not a directory: {working_dir}"
             )
