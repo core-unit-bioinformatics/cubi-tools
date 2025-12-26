@@ -34,3 +34,11 @@ class IOPath:
         if p.is_file():
             raise TypeError(f"Output path points to file: {path}")
         return p
+
+    @classmethod
+    def output_prefix(cls, path):
+        p = pl.Path(path.strip(".")).resolve(strict=False)
+        if p.is_dir():
+            raise TypeError(f"Output path prefix points to directory: {path}")
+        return p
+

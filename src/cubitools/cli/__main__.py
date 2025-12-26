@@ -33,6 +33,14 @@ def setup_cli_parser():
     )
 
     general_args.add_argument(
+        "--jobs", "-j",
+        type=int,
+        default=1,
+        dest="jobs",
+        help="Number of (typically, IO) jobs to execute in parallel. Default: 1"
+    )
+
+    general_args.add_argument(
         "--version", "-v",
         action="version",
         version=f"{__prog__} {__version__}",

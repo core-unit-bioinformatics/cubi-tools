@@ -1,5 +1,6 @@
 
 import cubitools.cli.git as subcmd_git
+import cubitools.cli.arch as subcmd_arch
 
 
 def add_module_level_parsers(subparsers):

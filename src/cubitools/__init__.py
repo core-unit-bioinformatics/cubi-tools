@@ -20,5 +20,3 @@ try:
     __debug_run__ = dict(os.environ)["CT_DEV_DEBUG"] == "1"
 except KeyError:
     __debug_run__ = False
-
-
