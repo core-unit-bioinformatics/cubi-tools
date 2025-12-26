@@ -23,9 +23,9 @@ def get_subcommand_parser(subparsers):
 
     subcmd_name = "git"
     subcmd_desc = (
-            "CUBI-Tools subcommand to initialize, clone or "
-            "normalize git repositories following CUBI standards."
-        )
+        "CUBI-Tools subcommand to initialize, clone or "
+        "normalize git repositories following CUBI standards."
+    )
 
     parser = subparsers.add_parser(
         subcmd_name,
