@@ -1,7 +1,12 @@
 
+import os
+import pathlib as pl
+import sys
+
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
 from cubitools.commons.enums import Compression, PathType
+from cubitools.commons.util_cls import FileSize, FileCollector
 import cubitools.commons.logging as ctlog
 from cubitools.commons.io_path import IOPath
 
@@ -51,7 +56,7 @@ def get_subcommand_parser(subparsers):
     parser.add_argument(
         "--chunk-limit", "-lim",
         type=str,
-        default="4T",
+        default="4t",
         dest="chunk_limit",
         help=(
             "Limit the size of the resulting tar archive, i.e. "
@@ -85,30 +90,28 @@ def get_subcommand_parser(subparsers):
         dest="minimal_manifest"
     )
 
-    mutex_select = parser.add_mutually_exclusive_group(required=False)
-
-    mutex_select.add_argument(
+    parser.add_argument(
         "--exclude", "-excl",
         type=str,
         nargs="*",
         default=[PathType.HIDDEN.name, PathType.SYMBOLIC.name],
         dest="exclude",
         help=(
-            "Exclude file paths matching any of these regular expressions "
-            "or attributes. This argument is ignore if '--include' is set. "
+            "Exclude file paths matching ANY of these regular expressions "
+            "or attributes. These arguments are checked first / before include. "
             "Default: HIDDEN and SYMBOLIC (= skip over hidden files and "
             "folders and symbolic links)."
         )
     )
 
-    mutex_select.add_argument(
+    parser.add_argument(
         "--include", "-incl",
         type=str,
         nargs="*",
         default=None,
         dest="include",
         help=(
-            "Include only file paths matching any of these regular expressions. "
+            "Include only file paths matching ANY of these regular expressions. "
             "Default: None (= include all paths that are NOT excluded)."
         )
 
@@ -127,10 +130,48 @@ def get_subcommand_parser(subparsers):
     return subcmd_name, subcmd_desc
 
 
+def collect_file_paths(archive_dirs, file_collector):
+
+    collected_files = []
+    for arch_dir in archive_dirs:
+        LOGGER.debug(f"Walking directory {arch_dir}")
+        collected_files.extend(file_collector.collect_files(arch_dir))
+        stats = file_collector.get_last_stats()
+        LOGGER.debug(f"Files collected: {stats.total_files}")
+        LOGGER.debug(f"Total file size: {stats.total_size.gb} gb")
+        LOGGER.debug(f"Min. file size: {stats.min_size.gb} gb")
+        LOGGER.debug(f"Max. file size: {stats.max_size.gb} gb")
+
+    return collected_files
+
+
+def check_chunk_limit(chunk_limit, file_collector):
+
+    stats = file_collector.get_stats()
+    LOGGER.debug(f"Files collected: {stats.total_files}")
+    LOGGER.debug(f"Total file size: {stats.total_size.gb} gb")
+    LOGGER.debug(f"Min. file size: {stats.min_size.gb} gb")
+    LOGGER.debug(f"Max. file size: {stats.max_size.gb} gb")
+
+    if stats.max_size > chunk_limit:
+        err_msg = (
+            f"Your selected chunk limit of {chunk_limit} byte "
+            f"(~{chunk_limit.gb} gb) is smaller than the largest "
+            f"file discovered in in the input directories: {stats.max_size.gb} gb."
+            "You need to increase the chunk limit or remove files larger "
+            "than that from the input directories."
+        )
+        raise ValueError(err_msg)
+    return None
+
+
 def exec_arch_module(args):
 
     LOGGER.set_debug_logging(args.debug)
     CT_CONFIG.set_logger(LOGGER)
+
+    chunk_limit = FileSize(args.chunk_limit)
+    file_collector = FileCollector(args.include, args.exclude)
 
 
 

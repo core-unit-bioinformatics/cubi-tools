@@ -33,6 +33,10 @@ class Sanitizer(abc.ABC):
 
 class LiteralSanitizer(Sanitizer):
 
+    def __init__(self, check: str) -> None:
+        super().__init__(check)
+        return None
+
     def validate(self, user_input):
         fail = self.regexp.match(user_input) is None
         if fail:
@@ -65,6 +69,10 @@ class UserAnswer(Sanitizer):
 
 class IntSanitizer(Sanitizer):
 
+    def __init__(self, check: str) -> None:
+        super().__init__(check)
+        return None
+
     def validate(self, user_input):
         fail = self.regexp.match(str(user_input)) is None
         if fail:
@@ -73,6 +81,10 @@ class IntSanitizer(Sanitizer):
 
 
 class CommaListSanitizer(Sanitizer):
+
+    def __init__(self, check: str) -> None:
+        super().__init__(check)
+        return None
 
     def validate(self, user_input):
         values = [v.strip() for v in user_input.split(",")]
