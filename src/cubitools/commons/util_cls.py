@@ -1,11 +1,13 @@
 
 import collections as col
+import dataclasses as dcl
 import functools as fnt
 import math
 import os
 import pathlib as pl
 import re
 import sys
+import typing
 
 from cubitools.commons.enums import FileSizeUnit, PathType
 
@@ -69,8 +71,12 @@ class FileSize:
     def __ge__(self, other) -> bool:
         return self.size >= other.size
 
-    def __add__(self, other) -> int:
-        return self.size + other.size
+    def __add__(self, other: FileSize) -> FileSize:  #type: ignore
+        # https://peps.python.org/pep-0484/
+        return FileSize(self.size + other.size)  #type: ignore
+
+    def __add__(self, other: int) -> int:
+        return self.size + other
 
     def _string_to_byte(self, file_size: str):
         """Take a unit-suffixed string and convert it
@@ -116,6 +122,65 @@ FilePath = col.namedtuple(
     "FilePath",
     field_names=["full_path", "relative_path", "file_size"]
 )
+
+@dcl.dataclass(frozen=False)
+class File:
+    abs_path: str | pl.Path = ""
+    rel_path: str | pl.Path = ""
+    rel_base: str | pl.Path = ""
+    exists: int = 0
+    size: FileSize = FileSize(0)
+    md5: str = ""
+    sha256: str = ""
+
+    def __post_init__(self):
+        if self.abs_path:
+            self.abs_path = pl.Path(self.abs_path).resolve()
+            self.__check_file()
+        elif self.rel_base and self.rel_path:
+            self.rel_base = pl.Path(self.rel_base).resolve()
+            self.rel_path = pl.Path(self.rel_path)
+            self.abs_path = self.rel_base.joinpath(self.rel_path)
+            self.__check_file()
+        elif not self.rel_path:
+            # this is the minimum
+            raise RuntimeError("Cannot initialize empty file instance.")
+        else:
+            # can do some guesses
+            self.rel_path = pl.Path(self.rel_path)
+            potential_base = pl.Path(".").resolve()
+            if potential_base.joinpath(self.rel_path).is_file():
+                self.rel_base = potential_base
+                self.abs_path = potential_base.joinpath(self.rel_path)
+                self.__check_file()
+        return None
+
+    def __check_file(self):
+        assert self.abs_path
+        if self.abs_path.is_file():  #type: ignore
+            self.exists = 1
+            fstat = os.stat(self.abs_path)
+            self.size = FileSize(fstat.st_size)
+        if self.abs_path.is_dir():  #type: ignore
+            raise ValueError(f"File instance initialized with directory: {self.abs_path}")
+        if self.abs_path and self.rel_base and self.rel_path:
+            id_path = self.abs_path == (self.rel_base.joinpath(self.rel_path))  #type: ignore
+            if not id_path:
+                raise ValueError(f"File instance created with incompatible path info: {self}")
+        return None
+
+    def complete(self):
+        if self.abs_path:
+            self.abs_path = pl.Path(self.abs_path).resolve()
+            self.__check_file()
+        elif self.rel_base and self.rel_path:
+            self.rel_base = pl.Path(self.rel_base)
+            self.rel_path = pl.Path(self.rel_path)
+            self.abs_path = self.rel_base.joinpath(self.rel_path)
+            self.__check_file()
+        else:
+            raise RuntimeError(f"Insufficient information to complete file info: {self}")
+        return None
 
 
 class FileCollector:
@@ -232,18 +297,15 @@ class FileCollector:
             # https://docs.python.org/3/library/os.html#os.walk
             subdirs = [subdir for subdir in subdirs if not self._exclude(subdir)]
             keep_files = [fn for fn in filenames if self.keep_file(fn)]
-            for file in keep_files:
-                full_path = pl.Path(toplevel, file)
-                # important: relative to archive dir
-                rel_path = full_path.relative_to(root_dir)
-                file_info = os.stat(full_path)
-                file_size = file_info.st_size
-                max_file_size = max(max_file_size, file_size)
-                min_file_size = min(min_file_size, file_size)
-                total_file_size += file_size
-                collected_files.append(
-                    FilePath(full_path, rel_path, file_size)
-                )
+            for filename in keep_files:
+                abs_path = pl.Path(toplevel, filename)
+                # important: relative to archive/root dir
+                rel_path = abs_path.relative_to(root_dir)
+                fobj = File(abs_path=abs_path, rel_base=root_dir, rel_path=rel_path)
+                max_file_size = max(max_file_size, fobj.size)
+                min_file_size = min(min_file_size, fobj.size)
+                total_file_size += fobj.size  #type: ignore
+                collected_files.append(fobj)
         num_files = len(collected_files)
         if num_files == 0:
             min_file_size = 0
