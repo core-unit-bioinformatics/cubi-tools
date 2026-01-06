@@ -132,17 +132,19 @@ def get_subcommand_parser(subparsers):
 
 def collect_file_paths(archive_dirs, file_collector):
 
-    collected_files = []
+    collected_files = dict()
+    size_per_dir = dict()
     for arch_dir in archive_dirs:
         LOGGER.debug(f"Walking directory {arch_dir}")
-        collected_files.extend(file_collector.collect_files(arch_dir))
+        collected_files[arch_dir] = file_collector.collect_files(arch_dir)
         stats = file_collector.get_last_stats()
+        size_per_dir[arch_dir] = stats.total_size
         LOGGER.debug(f"Files collected: {stats.total_files}")
         LOGGER.debug(f"Total file size: {stats.total_size.gb} gb")
         LOGGER.debug(f"Min. file size: {stats.min_size.gb} gb")
         LOGGER.debug(f"Max. file size: {stats.max_size.gb} gb")
 
-    return collected_files
+    return collected_files, size_per_dir
 
 
 def check_chunk_limit(chunk_limit, file_collector):
@@ -172,6 +174,8 @@ def exec_arch_module(args):
 
     chunk_limit = FileSize(args.chunk_limit)
     file_collector = FileCollector(args.include, args.exclude)
+
+    collected_files = collect_file_paths(args.archive_dirs, file_collector)
 
 
 
