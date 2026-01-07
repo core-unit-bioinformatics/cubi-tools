@@ -1,11 +1,11 @@
 
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-import cubitools.commons.logging as ctlog
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
 import cubitools.modules.git.structs as gitstructs
 
 
 LOGGER_NAME = __name__
-LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
+LOGGER = CubiToolsLogger(LOGGER_NAME)
 
 
 def build_git_config():

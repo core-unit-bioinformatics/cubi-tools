@@ -24,3 +24,9 @@ class PathType(enum.Enum):
 class Compression(enum.Enum):
     GZIP = 0
     XZ = 1
+
+
+class Checksum(enum.Enum):
+    MD5 = 0
+    SHA1 = 1
+    SHA256 = 2

@@ -5,8 +5,9 @@ import logging
 
 from cubitools import __prog__, __usage__, \
     __version__, __cubitools__
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
 import cubitools.cli.subparsers as subcmd
-import cubitools.commons.logging as ctlog
+
 
 
 LOGGER_NAME = "main"
@@ -91,7 +92,7 @@ def run_app():
         main_parser.print_help()
         raise
 
-    logger = ctlog.CubiToolsLogger("main", args.debug)
+    logger = CubiToolsLogger("main", args.debug)
     logger.debug("Logger setup complete - deferring to subcommand")
 
     try:

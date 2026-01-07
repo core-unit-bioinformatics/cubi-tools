@@ -3,8 +3,8 @@ import dataclasses as dcl
 import pathlib as pl
 import typing
 
-import cubitools.commons.sanitizers as sanitizers
-import cubitools.commons.syscall as sci
+import cubitools.commons.utils_cls.sanitizers as sanitizers
+import cubitools.commons.utils_cls.syscall as sci
 
 
 @dcl.dataclass(frozen=True)

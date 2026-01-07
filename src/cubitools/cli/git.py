@@ -6,8 +6,8 @@ import sys
 
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.io_path import IOPath
-import cubitools.commons.logging as ctlog
+from cubitools.commons.utils_cls.io_path import IOPath
+import cubitools.commons.utils_cls.logging as ctlog
 import cubitools.modules.git.config as gitconfig
 import cubitools.modules.git.structs as gitstructs
 

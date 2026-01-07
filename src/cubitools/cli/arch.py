@@ -1,18 +1,21 @@
 
-import os
+import itertools as itt
 import pathlib as pl
-import sys
 
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.enums import Compression, PathType
-from cubitools.commons.util_cls import FileSize, FileCollector
-import cubitools.commons.logging as ctlog
-from cubitools.commons.io_path import IOPath
+from cubitools.commons.enums import Compression, PathType, Checksum
+from cubitools.commons.utils_cls.filesize import FileSize
+from cubitools.commons.utils_cls.filecollector import FileCollector
+from cubitools.commons.utils_cls.io_path import IOPath
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
+import cubitools.commons.utils_func.checksums as ctchk
+import cubitools.commons.utils_func.files as ctfiles
+
 
 
 LOGGER_NAME = __name__
-LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
+LOGGER = CubiToolsLogger(LOGGER_NAME)
 
 
 def get_subcommand_parser(subparsers):
@@ -35,6 +38,7 @@ def get_subcommand_parser(subparsers):
         type=IOPath.input_dir,
         nargs="+",
         dest="archive_dirs",
+        required=True,
         help=""
     )
 
@@ -42,6 +46,7 @@ def get_subcommand_parser(subparsers):
         "--out-prefix", "-op",
         type=IOPath.output_prefix,
         dest="out_prefix",
+        required=True,
         help=""
     )
 
@@ -50,7 +55,18 @@ def get_subcommand_parser(subparsers):
         type=Compression,
         choices=list(Compression.__members__.keys()),
         default=Compression.GZIP,
+        dest="compression",
         help=f"Select tar compression tool. Default: {Compression.GZIP.name}"
+    )
+
+    parser.add_argument(
+        "--checksums", "-chk",
+        type=Checksum,
+        nargs="*",
+        choices=list(Checksum.__members__.keys()),
+        default=[Checksum.MD5, Checksum.SHA256],
+        dest="checksums",
+        help=f"Select checksums to compute. Default: {Checksum.MD5, Checksum.SHA256}"
     )
 
     parser.add_argument(
@@ -140,9 +156,9 @@ def collect_file_paths(archive_dirs, file_collector):
         stats = file_collector.get_last_stats()
         size_per_dir[arch_dir] = stats.total_size
         LOGGER.debug(f"Files collected: {stats.total_files}")
-        LOGGER.debug(f"Total file size: {stats.total_size.gb} gb")
-        LOGGER.debug(f"Min. file size: {stats.min_size.gb} gb")
-        LOGGER.debug(f"Max. file size: {stats.max_size.gb} gb")
+        LOGGER.debug(f"Total file size: {stats.total_size.mb} mb")
+        LOGGER.debug(f"Min. file size: {stats.min_size.mb} mb")
+        LOGGER.debug(f"Max. file size: {stats.max_size.mb} mb")
 
     return collected_files, size_per_dir
 
@@ -151,9 +167,9 @@ def check_chunk_limit(chunk_limit, file_collector):
 
     stats = file_collector.get_stats()
     LOGGER.debug(f"Files collected: {stats.total_files}")
-    LOGGER.debug(f"Total file size: {stats.total_size.gb} gb")
-    LOGGER.debug(f"Min. file size: {stats.min_size.gb} gb")
-    LOGGER.debug(f"Max. file size: {stats.max_size.gb} gb")
+    LOGGER.debug(f"Total file size: {stats.total_size.mb} mb")
+    LOGGER.debug(f"Min. file size: {stats.min_size.mb} mb")
+    LOGGER.debug(f"Max. file size: {stats.max_size.mb} mb")
 
     if stats.max_size > chunk_limit:
         err_msg = (
@@ -175,8 +191,17 @@ def exec_arch_module(args):
     chunk_limit = FileSize(args.chunk_limit)
     file_collector = FileCollector(args.include, args.exclude)
 
-    collected_files = collect_file_paths(args.archive_dirs, file_collector)
+    LOGGER.debug("Collecting files...")
+    collected_files, size_per_dir = collect_file_paths(args.archive_dirs, file_collector)
 
+    if args.dry_run:
+        LOGGER.info("Dry run set - skipping checksum computation")
+    else:
+        LOGGER.debug("Computing checksums...")
+        ctchk.add_checksums_to_files(
+            ctfiles.get_collected_files_iter(collected_files),
+            args.checksums, args.jobs, LOGGER
+        )
 
 
     return 0
