@@ -168,7 +168,7 @@ class CubiToolsLogger:
                 continue
             if not line.strip():
                 continue
-            if line.startswith("^^^"):
+            if line.strip().startswith("^^^"):
                 continue
             line_num += 1
             log_lines.append(
