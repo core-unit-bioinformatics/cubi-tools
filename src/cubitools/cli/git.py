@@ -8,8 +8,8 @@ from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
 from cubitools.commons.utils_cls.io_path import IOPath
 import cubitools.commons.utils_cls.logging as ctlog
-import cubitools.modules.git.config as gitconfig
-import cubitools.modules.git.structs as gitstructs
+import cubitools.commons.utils_func.git_config as gitconfig
+from cubitools.commons.utils_cls.git_repo import GitRepository
 
 # TODO - deprecated / legacy
 from cubitools.commons.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
@@ -357,14 +357,14 @@ def exec_git_module(args):
     gitconfig.build_git_config()
 
     if args.init is not None:
-        repo = gitstructs.GitRepository(
+        repo = GitRepository(
             args.init,
             CT_CONFIG.git_presets[args.git_preset],
             args.dry_run, logger=LOGGER
         )
         repo.init_repo()
     elif args.norm is not None:
-        repo = gitstructs.GitRepository(
+        repo = GitRepository(
             args.norm,
             CT_CONFIG.git_presets[args.git_preset],
             args.dry_run, logger=LOGGER

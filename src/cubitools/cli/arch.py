@@ -199,7 +199,7 @@ def exec_arch_module(args):
     else:
         LOGGER.debug("Computing checksums...")
         ctchk.add_checksums_to_files(
-            ctfiles.get_collected_files_iter(collected_files),
+            ctfiles.get_files_iter(collected_files),
             args.checksums, args.jobs, LOGGER
         )
 

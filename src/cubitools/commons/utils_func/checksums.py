@@ -9,7 +9,7 @@ from cubitools.commons.utils_cls.syscall import SysCallInterface
 from cubitools.commons.utils_cls.file import File
 
 
-def checksum_worker(inq, outq):
+def _checksum_worker(inq, outq):
 
 
     chk_sci = dict()
@@ -40,7 +40,7 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
     recvq = sync_man.Queue()
 
     workers = [
-        mp.Process(target=checksum_worker, args=(sendq, recvq))
+        mp.Process(target=_checksum_worker, args=(sendq, recvq))
         for _ in range(jobs)
     ]
     logger.debug(f"Initialized {jobs} worker processes")
