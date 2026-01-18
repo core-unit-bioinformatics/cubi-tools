@@ -3,6 +3,7 @@ import collections as col
 import math
 import re
 import sys
+import typing
 
 from cubitools.commons.enums import FileSizeUnit
 
@@ -33,6 +34,8 @@ class FileSize:
                 self.size = sys.maxsize
             else:
                 self.size = int(round(file_size, 0))
+        elif isinstance(file_size, FileSize):
+            self.size = file_size.size
         else:
             raise TypeError(f"Cannot process type of file size: {file_size} / {type(file_size)}")
         for i in range(len(FileSizeUnit)):
@@ -48,36 +51,63 @@ class FileSize:
     def __repr__(self):
         return f"{self.size}"
 
-    def __eq__(self, other) -> bool:
-        return self.size == other.size
-
-    def __ne__(self, other) -> bool:
-        return self.size != other.size
-
-    def __lt__(self, other) -> bool:
-        return self.size < other.size
-
-    def __le__(self, other) -> bool:
-        return self.size <= other.size
-
-    def __gt__(self, other) -> bool:
-        return self.size > other.size
-
-    def __ge__(self, other) -> bool:
-        return self.size >= other.size
-
-    def __add__(self, other: 'int|float|FileSize') -> 'int|float|FileSize':
-        # https://peps.python.org/pep-0484/
-        if isinstance(other, int):
-            return self.size + other
-        elif isinstance(other, float):
-            return self.size + other
-        elif isinstance(other, FileSize):
-            return FileSize(self.size + other.size)
+    # in the following: adding 'object' just to silence
+    # pylance: reportIncompatibleMethodOverride
+    def __eq__(self, other: 'object|int|float|FileSize') -> bool:
+        if isinstance(other, object|int|float):
+            return self.size == other
         else:
-            raise TypeError
+            return self.size == other.size
 
-    def _string_to_byte(self, file_size: str):
+    def __ne__(self, other: 'object|int|float|FileSize') -> bool:
+        if isinstance(other, object|int|float):
+            return self.size != other
+        else:
+            return self.size != other.size
+
+    def __lt__(self, other: 'int|float|FileSize') -> bool:
+        if isinstance(other, int|float):
+            return self.size < other
+        else:
+            return self.size < other.size
+
+    def __le__(self, other: 'int|float|FileSize') -> bool:
+        if isinstance(other, int|float):
+            return self.size <= other
+        else:
+            return self.size <= other.size
+
+    def __gt__(self, other: 'int|float|FileSize') -> bool:
+        if isinstance(other, int|float):
+            return self.size > other
+        else:
+            return self.size > other.size
+
+    def __ge__(self, other: 'int|float|FileSize') -> bool:
+        if isinstance(other, int|float):
+            return self.size >= other
+        else:
+            return self.size >= other.size
+
+    @typing.overload
+    def __add__(self, other: int) -> int:
+        pass
+
+    @typing.overload
+    def __add__(self, other: float) -> float:
+        pass
+
+    @typing.overload
+    def __add__(self, other: 'FileSize') -> 'FileSize':
+        pass
+
+    def __add__(self, other):
+        if isinstance(other, int|float):
+            return self.size + other
+        else:
+            return FileSize(self.size + other.size)
+
+    def _string_to_byte(self, file_size: str) -> int:
         """Take a unit-suffixed string and convert it
         to a number that is set as the 'size' attribute
         of the class instance and that represents the
@@ -113,5 +143,7 @@ class FileSize:
     def _to_unit(self, power):
         size_in_unit = self.size / math.pow(1024, power)
         if size_in_unit < 1:
-            size_in_unit = round(size_in_unit, 5)
+            size_in_unit = round(size_in_unit, 3)
+        else:
+            size_in_unit = round(size_in_unit, 1)
         return size_in_unit

@@ -1,4 +1,5 @@
 
+import fnmatch as fnm
 import functools as fnt
 import os
 import pathlib as pl
@@ -12,43 +13,75 @@ from cubitools.commons.utils_cls.filesize import FileSize, FileSizeStats
 
 class FileCollector:
 
-    def __init__(self, include: list[str], exclude: list[str]) -> None:
-        if include is None:
-            self.include_match = self._init_matcher([], True)
-        else:
-            self.include_match = self._init_matcher(include, True)
-        if exclude is None:
-            self.exclude_match = []
-        else:
-            self.exclude_match = self._init_matcher(exclude)
+    def __init__(self, exclude_dir: list[str]|None, exclude_file: list[str]|None,
+                 include_dir: list[str]|None, include_file: list[str]) -> None:
+        self._follow_symlink_dirs = False
         self.walked_dirs = dict()
         self._last_dir = None
+        self._exclude_dir = self._init_matcher(exclude_dir, False, False)
+        self._exclude_file = self._init_matcher(exclude_file, True, False)
+        self._include_dir = self._init_matcher(include_dir, False, True)
+        self._include_file = self._init_matcher(include_file, True, True)
         return None
 
-    def _init_matcher(self, fixed_exprs: list[str], add_default=False):
+    def _init_matcher(self, glob_patterns, match_filename, include):
         matching_functions = []
-        for fixed_expr in fixed_exprs:
-            if fixed_expr.upper() == PathType.HIDDEN.name:
-                # check for: is hidden
-                matcher = self._get_match_hidden()
-            elif fixed_expr.upper() == PathType.SYMBOLIC.name:
-                # check for: is symbolic
-                matcher = self._get_match_symlink()
-            else:
-                # check for: fixed string match in fp
-                matcher = self._get_match_generic(fixed_expr)
+        if glob_patterns is None:
+            # default matcher will be added below
+            pass
+        else:
+            for glob_pattern in glob_patterns:
+                _up_pat = glob_pattern.upper()
+                if _up_pat == PathType.HIDDEN.name:
+                    # check for: is hidden
+                    matcher = self._get_match_hidden()
+                elif _up_pat == PathType.SYMBOLIC.name:
+                    if match_filename:
+                        pass
+                    else:
+                        # special setting for os.walk
+                        if include:
+                            self._follow_symlink_dirs = True
+                        else:
+                            self._follow_symlink_dirs = False
+                    matcher = self._get_match_symlink()
+                else:
+                    # check for: fixed string match in fp
+                    matcher = self._get_match_generic(glob_pattern)
+                matching_functions.append(matcher)
+        if not matching_functions:
+            matcher = self._get_match_default(include)
             matching_functions.append(matcher)
-        if not matching_functions and add_default:
-             matcher = self._get_match_default()
-             matching_functions.append(matcher)
         return matching_functions
 
-    def _get_match_default(self):
+    def _get_match_default(self, include):
 
-        def is_match(file_path) -> bool:
-            return True
+        if include:
+            def include_all(path) -> bool:
+                """Default matcher for include check,
+                always True, i.e. include everything
 
-        return is_match
+                Args:
+                    path (str): file path or component thereof
+
+                Returns:
+                    bool: include/keep the path
+                """
+                return True
+            return include_all
+        else:
+            def exclude_none(path) -> bool:
+                """Default matcher for exclude check,
+                always False, i.e. exclude nothing
+
+                Args:
+                    path (str): file path or component thereof
+
+                Returns:
+                    bool: exclude/drop the path
+                """
+                return False
+            return exclude_none
 
     def _get_match_hidden(self):
 
@@ -64,29 +97,56 @@ class FileCollector:
 
         return is_symlink
 
-    def _get_match_generic(self, fixed_expr: str):
+    def _get_match_generic(self, pattern: str):
 
-        def contains_match(fixed_expr: str, file_path: pl.Path) -> bool:
-            return fixed_expr in str(file_path)
+        def glob_match(glob_pat: str, path) -> bool:
+            return fnm.fnmatch(path, glob_pat)
 
-        partial = fnt.partial(contains_match, *(fixed_expr,))
+        partial = fnt.partial(glob_match, *(pattern,))
         return partial
 
-    def _exclude(self, file_path) -> bool:
-        # NB here: any([]) is False
-        return any(match_fun(file_path) for match_fun in self.exclude_match)
+    def keep_dirs(self, dir_paths: list[str]):
+        """This method is specifically written to be compatible
+        with `os.walk` in terms of filtering the list of subdirs
+        in place. If not modified in place, `os.walk` will recurse
+        into subdirectories that should not be visited.
 
-    def _include(self, file_path) -> bool:
-        # NB here: any([]) is False
-        return any(match_fun(file_path) for match_fun in self.include_match)
+        Args:
+            dir_paths (list[str]): _description_
 
-    def keep_file(self, file_path) -> bool:
-        if self._exclude(file_path):
-            return False
-        elif self._include(file_path):
-            return True
-        else:
-            return False
+        Returns:
+            _type_: _description_
+        """
+        delete_entries = []
+        for idx, dir_path in enumerate(dir_paths):
+            if any(check_exclude(dir_path) for check_exclude in self._exclude_dir):
+                # any of the exclude checks triggered -> exclude
+                delete_entries.append(idx)
+                continue
+            if not any(check_include(dir_path) for check_include in self._include_dir):
+                # none of the include checks triggered -> exclude
+                delete_entries.append(idx)
+        # NB: crucial to delete entries in the list
+        # from right to left, otherwise the index values
+        # will be shifted if deleting from left to right
+        # (low to high)
+        for idx in sorted(delete_entries, reverse=True):
+            del dir_paths[idx]
+        return None
+
+    def keep_files(self, filenames: list[str]) -> list[str]:
+
+        retain_files = []
+        for filename in filenames:
+            if any(check_exclude(filename) for check_exclude in self._exclude_file):
+                # any of the exclude checks triggered -> exclude
+                continue
+            if not any(check_include(filename) for check_include in self._include_file):
+                # none of the include checks triggered -> exclude
+                continue
+            retain_files.append(filename)
+
+        return retain_files
 
     def get_last_stats(self):
 
@@ -106,7 +166,7 @@ class FileCollector:
         max_size = 0
         for _, dir_stats in self.walked_dirs.items():
             total_files += dir_stats.total_files
-            total_size += dir_stats.total_size
+            total_size = dir_stats.total_size + total_size
             min_size = min(min_size, dir_stats.min_size)
             max_size = max(max_size, dir_stats.max_size)
         stats = FileSizeStats(
@@ -121,13 +181,13 @@ class FileCollector:
         min_file_size = sys.maxsize
         total_file_size = 0
         collected_files = []
-        for toplevel, subdirs, filenames in os.walk(root_dir, topdown=True, followlinks=False):
+        for toplevel, subdirs, filenames in os.walk(root_dir, topdown=True, followlinks=self._follow_symlink_dirs):
             # NB: subdirs can be modified in-place to prune away parts of the
             # directory tree that we do not want; see
             # https://docs.python.org/3/library/os.html#os.walk
-            subdirs = [subdir for subdir in subdirs if not self._exclude(subdir)]
-            keep_files = [fn for fn in filenames if self.keep_file(fn)]
-            for filename in keep_files:
+            self.keep_dirs(subdirs)
+            filenames = self.keep_files(filenames)
+            for filename in filenames:
                 abs_path = pl.Path(toplevel, filename)
                 # important: relative to archive/root dir
                 rel_path = abs_path.relative_to(root_dir)

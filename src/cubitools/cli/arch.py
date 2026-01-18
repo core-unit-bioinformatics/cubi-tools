@@ -107,30 +107,55 @@ def get_subcommand_parser(subparsers):
     )
 
     parser.add_argument(
-        "--exclude", "-excl",
+        "--exclude-dir", "-ex-dir",
         type=str,
         nargs="*",
         default=[PathType.HIDDEN.name, PathType.SYMBOLIC.name],
-        dest="exclude",
+        dest="exclude_dir",
         help=(
-            "Exclude file paths matching ANY of these regular expressions "
-            "or attributes. These arguments are checked first / before include. "
+            "Exclude directories matching ANY of these glob patterns "
+            "or attributes. These arguments are checked before include. "
+            "Default: HIDDEN and SYMBOLIC (= skip over hidden directories and "
+            "do not walk into/follow symbolic link directories)."
+        )
+    )
+
+    parser.add_argument(
+        "--exclude-file", "-ex-file",
+        type=str,
+        nargs="*",
+        default=[PathType.HIDDEN.name, PathType.SYMBOLIC.name],
+        dest="exclude_file",
+        help=(
+            "Exclude files (by name) matching ANY of these glob patterns "
+            "or attributes. These arguments are checked before include. "
             "Default: HIDDEN and SYMBOLIC (= skip over hidden files and "
             "folders and symbolic links)."
         )
     )
 
     parser.add_argument(
-        "--include", "-incl",
+        "--include-dir", "-in-dir",
         type=str,
         nargs="*",
         default=None,
-        dest="include",
+        dest="include_dir",
         help=(
-            "Include only file paths matching ANY of these regular expressions. "
-            "Default: None (= include all paths that are NOT excluded)."
+            "Include only directories matching ANY of these glob patterns. "
+            "Default: None (= include all directories that are NOT excluded)."
         )
+    )
 
+    parser.add_argument(
+        "--include-file", "-in-file",
+        type=str,
+        nargs="*",
+        default=None,
+        dest="include_file",
+        help=(
+            "Include only files (by name) matching ANY of these glob patterns. "
+            "Default: None (= include all files that are NOT excluded)."
+        )
     )
 
     parser.add_argument(
@@ -175,7 +200,7 @@ def check_chunk_limit(chunk_limit, file_collector):
         err_msg = (
             f"Your selected chunk limit of {chunk_limit} byte "
             f"(~{chunk_limit.gb} gb) is smaller than the largest "
-            f"file discovered in in the input directories: {stats.max_size.gb} gb."
+            f"file discovered in in the input directories: {stats.max_size.gb} gb. "
             "You need to increase the chunk limit or remove files larger "
             "than that from the input directories."
         )
@@ -189,7 +214,10 @@ def exec_arch_module(args):
     CT_CONFIG.set_logger(LOGGER)
 
     chunk_limit = FileSize(args.chunk_limit)
-    file_collector = FileCollector(args.include, args.exclude)
+    file_collector = FileCollector(
+        args.exclude_dir, args.exclude_file,
+        args.include_dir, args.include_file
+    )
 
     LOGGER.debug("Collecting files...")
     collected_files, size_per_dir = collect_file_paths(args.archive_dirs, file_collector)
@@ -197,12 +225,15 @@ def exec_arch_module(args):
     if args.dry_run:
         LOGGER.info("Dry run set - skipping checksum computation")
     else:
+        # NB: the file objects in 'collected_files' are updated
+        # in place with the respective checksum(s)
         LOGGER.debug("Computing checksums...")
         ctchk.add_checksums_to_files(
             ctfiles.get_files_iter(collected_files),
             args.checksums, args.jobs, LOGGER
         )
 
+    check_chunk_limit(chunk_limit, file_collector)
 
     return 0
 

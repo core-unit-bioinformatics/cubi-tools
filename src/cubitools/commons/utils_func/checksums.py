@@ -11,7 +11,6 @@ from cubitools.commons.utils_cls.file import File
 
 def _checksum_worker(inq, outq):
 
-
     chk_sci = dict()
 
     while 1:
@@ -27,8 +26,16 @@ def _checksum_worker(inq, outq):
                 sci_exec = f"{checksum_type.name.lower()}sum"
                 sci = SysCallInterface(executable=sci_exec)
                 chk_sci[checksum_type] = sci
-            checksum, _ = sci.run([file_path])
-            checksum, _ = checksum.split()
+            try:
+                checksum, _ = sci.run([file_path])
+                checksum, _ = checksum.split(maxsplit=1)
+            except ValueError as verr:
+                err_msg = (
+                    f"Error computing checksum {checksum_type} "
+                    f"for file {file_path}"
+                )
+                verr.add_note(err_msg)
+                raise
             outq.put((request, checksum))
     return None
 
@@ -46,12 +53,17 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
     logger.debug(f"Initialized {jobs} worker processes")
     [p.start() for p in workers]
 
+    file_buffer = []
     try:
         num_files = len(files)  #type: ignore
     except TypeError:
-        # this can happen if an iterator is passed
-        # instead of a plain list, which makes sense
-        # for very many fils
+        # This can happen if an iterator is passed
+        # instead of a plain list. However, given that
+        # the files in this process have to be updated
+        # with their checksum(s), we need to have access
+        # to the file objects after the iterator is
+        # exhausted. Hence, 'num_files = None' triggers
+        # buffering the file objects in another list.
         num_files = None
 
     if num_files is None:
@@ -59,13 +71,16 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
             "Adding files from iterator to processing queue w/ "
             f"{len(checksums)} checksum(s) requests for each."
         )
+        to_buffer = lambda fobj: file_buffer.append(fobj)
     else:
         logger.debug(
             f"Adding {num_files} files to processing queue w/ "
             f"{len(checksums)} checksum(s) requests for each."
         )
+        to_buffer = lambda fobj: None
 
     for num_files, file in enumerate(files, start=1):
+        to_buffer(file)
         for checksum in checksums:
             sendq.put((file.abs_path, checksum))
 
@@ -105,6 +120,7 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
         else:
             file_checksums[res[0]] = res[1]
         if active_workers < 1:
+            logger.debug(f"All workers done - breaking out of while loop")
             break
 
     for p in workers:
@@ -130,7 +146,12 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
         logger.error(err_msg)
         raise RuntimeError(err_msg)
 
-    for file in files:
+    if len(file_buffer) > 0:
+        update_files = file_buffer
+    else:
+        update_files = files
+
+    for file in update_files:
         for checksum in checksums:
             attr_name = checksum.name.lower()
             setattr(file, attr_name, file_checksums[(file.abs_path, checksum)])
