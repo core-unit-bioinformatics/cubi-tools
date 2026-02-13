@@ -107,6 +107,42 @@ class FileSize:
         else:
             return FileSize(self.size + other.size)
 
+    @typing.overload
+    def __mul__(self, other: int) -> 'FileSize':  #type: ignore
+        # This is flagged as overlapping overloads with the float
+        # version and seems to be caused by implicitly assuming
+        # 'numerical' input instead of strictly enforcing a float;
+        # see here for a lengthy discussion:
+        # https://discuss.python.org/t/options-for-a-long-term-fix-of-the-special-case-for-float-int-complex
+        # Note to devs: here, very special case where type: ignore is allowed
+        pass
+
+    @typing.overload
+    def __mul__(self, other: float) -> float:
+        pass
+
+    @typing.overload
+    def __mul__(self, other: 'FileSize') -> 'FileSize':
+        pass
+
+    def __mul__(self, other):
+        if isinstance(other, int):
+            return FileSize(int(self.size * other))
+        elif isinstance(other, FileSize):
+            return FileSize(int(self.size * other.size))
+        elif isinstance(other, float):
+            return self.size * other
+        else:
+            raise TypeError(type(other))
+
+    def __truediv__(self, other: 'int|float|FileSize') -> float:
+        if isinstance(other, int|float):
+            return self.size / other
+        elif isinstance(other, FileSize):
+            return self.size / other.size
+        else:
+            raise TypeError(type(other))
+
     def _string_to_byte(self, file_size: str) -> int:
         """Take a unit-suffixed string and convert it
         to a number that is set as the 'size' attribute
