@@ -1,5 +1,6 @@
 
 import itertools as itt
+import math
 import pathlib as pl
 
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
@@ -208,6 +209,43 @@ def check_chunk_limit(chunk_limit, file_collector):
     return None
 
 
+def group_files_in_batches(archive_files, chunk_limit, arch_dir_sizes):
+
+    arch_dir = None
+    current_batch = None
+    # above: just to calm pylint
+    batch_num = 1
+    batch_size = 0
+    file_batches = dict()
+    for arch_dir, arch_files in archive_files.items():
+        current_batch = []
+        arch_dir_size = arch_dir_sizes[arch_dir]
+        if arch_dir_size < chunk_limit:
+            active_limit = chunk_limit
+        else:
+            split_equal = math.ceil(arch_dir_size / chunk_limit)
+            _fudge_factor = 1.1
+            # This is an empirical factor because a hard div here
+            # typically leads to 'one more' batch containing only a
+            # few files due to the unknown distribution of file
+            # sizes per batch. Slightly increasing the active limit
+            # leads to a more balanced distribution of files per batch.
+            active_limit = min(chunk_limit, math.ceil(arch_dir_size / split_equal * _fudge_factor))
+        for arch_file in arch_files:
+            if batch_size + arch_file.size > active_limit:
+                file_batches[(arch_dir, batch_num, batch_size)] = current_batch
+                batch_num += 1
+                # this file goes into the new batch
+                current_batch = [arch_file]
+                batch_size = arch_file.size
+            else:
+                batch_size += arch_file.size
+                # append to current batch
+                current_batch.append(arch_file)
+    file_batches[(arch_dir, batch_num, batch_size)] = current_batch
+    return file_batches
+
+
 def exec_arch_module(args):
 
     LOGGER.set_debug_logging(args.debug)
@@ -234,6 +272,9 @@ def exec_arch_module(args):
         )
 
     check_chunk_limit(chunk_limit, file_collector)
+
+    file_batches = group_files_in_batches(collected_files, chunk_limit, size_per_dir)
+
 
     return 0
 
