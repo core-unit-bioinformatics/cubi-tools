@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse as argp
+import atexit
 import logging
+import os
 
 from cubitools import __prog__, __usage__, \
     __version__, __cubitools__
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
 import cubitools.cli.subparsers as subcmd
 
+
+CLEANUP_FILES = []
 
 
 LOGGER_NAME = "main"
@@ -80,6 +84,16 @@ def setup_cli_parser():
     return parser
 
 
+def final_cleanup():
+
+    for fpath in CLEANUP_FILES:
+        try:
+            os.remove(fpath)
+        except FileNotFoundError:
+            pass
+    return None
+
+
 def run_app():
 
     main_parser = setup_cli_parser()
@@ -95,10 +109,13 @@ def run_app():
     logger = CubiToolsLogger("main", args.debug)
     logger.debug("Logger setup complete - deferring to subcommand")
 
+    atexit.register(final_cleanup)
+
     try:
         args.exec(args)
     except Exception as err:
         logger.critical()
+        final_cleanup()
         raise err
 
     logger.debug("Back in main - exiting...")
