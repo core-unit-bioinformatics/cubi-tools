@@ -1,4 +1,5 @@
 
+import dataclasses
 import enum
 
 
@@ -30,3 +31,10 @@ class Checksum(enum.Enum):
     MD5 = 0
     SHA1 = 1
     SHA256 = 2
+
+
+@dataclasses.dataclass(frozen=True)
+class ChecksumLength:
+    MD5: int = 32
+    SHA1: int = 40
+    SHA256: int = 64
