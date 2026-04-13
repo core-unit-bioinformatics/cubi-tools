@@ -67,7 +67,7 @@ def get_subcommand_parser(subparsers):
         choices=list(Checksum.__members__.keys()),
         default=[Checksum.MD5, Checksum.SHA256],
         dest="checksums",
-        help=f"Select checksums to compute. Default: {Checksum.MD5, Checksum.SHA256}"
+        help=f"Select checksum(s) to compute. Default: {Checksum.MD5.name, Checksum.SHA256.name}"
     )
 
     parser.add_argument(
@@ -88,7 +88,11 @@ def get_subcommand_parser(subparsers):
         type=IOPath.output_dir,
         default=None,
         dest="scratch_dir",
-        help=""
+        help=(
+            "Use this directory as destination for all tar and metadata files. "
+            "Setting this option may be required of the source file system has "
+            "not enough free space to create the tar archives."
+        )
     )
 
     mutex_manifest = parser.add_mutually_exclusive_group(required=False)
@@ -97,14 +101,20 @@ def get_subcommand_parser(subparsers):
         "--no-manifest", "-nom",
         action="store_true",
         default=False,
-        dest="no_manifest"
+        dest="no_manifest",
+        help="Do not create a manifest file listing archived files, sizes and checksums."
     )
 
     mutex_manifest.add_argument(
         "--minimal-manifest", "-mnm",
         action="store_true",
         default=False,
-        dest="minimal_manifest"
+        dest="minimal_manifest",
+        help=(
+            "Only create a minimal manifest file listing the archived file paths, "
+            "the file sizes in byte and the shortest of all computed checksums "
+            "(typically, that is MD5)."
+        )
     )
 
     parser.add_argument(
@@ -274,6 +284,8 @@ def exec_arch_module(args):
     check_chunk_limit(chunk_limit, file_collector)
 
     file_batches = group_files_in_batches(collected_files, chunk_limit, size_per_dir)
+    print(file_batches)
+    raise
 
 
     return 0
