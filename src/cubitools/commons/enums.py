@@ -23,18 +23,19 @@ class PathType(enum.Enum):
 
 
 class Compression(enum.Enum):
-    GZIP = 0
-    XZ = 1
+    gzip = 0
+    gz = 0
+    xz = 1
 
 
 class Checksum(enum.Enum):
-    MD5 = 0
-    SHA1 = 1
-    SHA256 = 2
+    md5 = 0
+    sha1 = 1
+    sha256 = 2
 
 
 @dataclasses.dataclass(frozen=True)
 class ChecksumLength:
-    MD5: int = 32
-    SHA1: int = 40
-    SHA256: int = 64
+    md5: int = 32
+    sha1: int = 40
+    sha256: int = 64
