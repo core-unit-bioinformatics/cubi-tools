@@ -4,6 +4,8 @@ import os
 import pathlib as pl
 import sys
 
+__py_version__ = sys.version_info
+
 try:
     __version__ = impmd.version("cubitools")
     __pkg_metadata__ = impmd.metadata("cubitools")

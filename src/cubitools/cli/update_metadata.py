@@ -14,11 +14,7 @@ import semver
 import toml
 
 from cubitools import __prog__, __license__, __version__
-from cubitools import __cubitools__
-from cubitools.constants import DEFAULT_WORKING_DIR, \
-    UPD_MD_DEFAULT_TEMPLATE_REPO, \
-    UPD_MD_DEFAULT_BRANCH_NAME, \
-    UPD_MD_DEFAULT_METADATA_FILES
+from cubitools import __cubitools__, __py_version__
 
 
 def parse_command_line():
@@ -36,16 +32,31 @@ def parse_command_line():
         help="Show version and exit.",
     )
 
-    parser.add_argument(
-        "--working-dir", "--root", "-wd", "-w",
-        type=lambda path: pl.Path(path).resolve(strict=True),
-        default=DEFAULT_WORKING_DIR,
-        dest="working_dir",
-        help=(
-            "Default working / root directory of operations. "
-            f"Default: {DEFAULT_WORKING_DIR}"
+    DEFAULT_WORKING_DIR = pl.Path(".").resolve(strict=True)
+
+    if __py_version__.minor >= 13:
+        parser.add_argument(
+            "--working-dir", "--root", "-wd", "-w",
+            type=lambda path: pl.Path(path).resolve(strict=True),
+            default=DEFAULT_WORKING_DIR,
+            dest="working_dir",
+            help=(
+                "Default working / root directory of operations. "
+                f"Default: {DEFAULT_WORKING_DIR}"
+            ),
+            deprecated=True
         )
-    )
+    else:
+        parser.add_argument(
+            "--working-dir", "--root", "-wd", "-w",
+            type=lambda path: pl.Path(path).resolve(strict=True),
+            default=DEFAULT_WORKING_DIR,
+            dest="working_dir",
+            help=(
+                "Default working / root directory of operations. "
+                f"Default: {DEFAULT_WORKING_DIR} --- DEPRECATED OPTION."
+            )
+        )
 
     parser.add_argument(
         "--target-dir", "-t",
@@ -63,6 +74,12 @@ def parse_command_line():
         required=True
     )
 
+    # TODO
+    # this is a temporary solution to make this script working
+    # in future versions, this will be configured via CT_CONFIG,
+    # that is, the info is loaded from the config file if not
+    # provided on the command line
+    UPD_MD_DEFAULT_TEMPLATE_REPO = "https://github.com/core-unit-bioinformatics/template-metadata-files.git"
     parser.add_argument(
         "--template-metadata-repository",
         "--reference-repository",
@@ -118,6 +135,12 @@ def parse_command_line():
         )
     )
 
+    # TODO
+    # this is a temporary solution to make this script working
+    # in future versions, this will be configured via CT_CONFIG,
+    # that is, the info is loaded from the config file
+    # if not provided on the command line
+    UPD_MD_DEFAULT_BRANCH_NAME = "feat-update-metadata"
     parser.add_argument(
         "--create-new-branch",
         "--new-branch",
@@ -447,7 +470,8 @@ def print_dry_run_info(system_call, work_folder=None):
     assert isinstance(cmd, str)
 
     if work_folder is None:
-        wd = DEFAULT_WORKING_DIR
+        # see above in parse_command_line() for the default working directory
+        wd = pl.Path(".").resolve(strict=True)
     else:
         wd = work_folder
 
@@ -537,6 +561,12 @@ def git_checkout(local_metadata_path, branch_or_tag, dry_run):
 
 def git_new_branch(local_target_path, dry_run):
 
+    # TODO
+    # this is a temporary solution to make this script working
+    # in future versions, this will be configured via CT_CONFIG,
+    # that is, the info is loaded from the config file
+    # if not provided on the command line
+    UPD_MD_DEFAULT_BRANCH_NAME = "feat-update-metadata"
     new_branch_name = UPD_MD_DEFAULT_BRANCH_NAME
     git_cmd = ["git", "switch", "-c", new_branch_name]
     if dry_run:
@@ -700,6 +730,12 @@ def main():
                 target_copy_path.mkdir(parents=True, exist_ok=True)
         else:
             target_copy_path = target_dir
+        # TODO
+        # this is a temporary solution to make this script working
+        # in future versions, this will be hardcoded in some sub-
+        # module (maybe as enum?)
+        UPD_MD_DEFAULT_METADATA_FILES = [".gitignore", "CITATION.md", "LICENSE", ".editorconfig"]
+
         for md_file in UPD_MD_DEFAULT_METADATA_FILES:
             file_updated = update_file(
                 md_file, local_metadata_path, target_copy_path, dry_run
