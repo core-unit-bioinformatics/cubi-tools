@@ -61,3 +61,8 @@ class ChecksumLength:
             [(f.default, f.name) for f in dataclasses.fields(cls)]
         )
         return ordered
+
+
+class GitAuth(enum.Enum):
+    ssh = 0
+    https = 1

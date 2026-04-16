@@ -44,7 +44,7 @@ class SysCallInterface:
 
         for version_option in common_options:
             try:
-                out, _ = self.run([version_option])
+                out, _ = self.run([version_option], force_exec=True)
             except sp.CalledProcessError:
                 # assumption: it's the wrong version
                 # string for the executable - ignore

@@ -11,9 +11,6 @@ import cubitools.commons.utils_cls.logging as ctlog
 import cubitools.commons.utils_func.git_config as gitconfig
 from cubitools.commons.utils_cls.git_repo import GitRepository
 
-# TODO - deprecated / legacy
-from cubitools.commons.constants import KNOWN_GIT_REMOTES, DEFAULT_WORKING_DIR, DEFAULT_CUBITOOLS_CONFIG_DIR
-
 
 LOGGER_NAME = __name__
 LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
@@ -98,7 +95,7 @@ def get_subcommand_parser(subparsers):
 
 
 def check_git_identity_files(config_dir):
-
+    raise DeprecationWarning("This function is deprecated")
     missing_id_files = []
     for git_remote in KNOWN_GIT_REMOTES.values():
         id_file = config_dir.joinpath(f"{git_remote.name}.id")
@@ -116,7 +113,7 @@ def check_git_identity_files(config_dir):
 
 
 def dump_git_id_info(remote_name, cubi_config_dir):
-
+    raise DeprecationWarning("This function is deprecated")
     id_file = cubi_config_dir.joinpath(f"{remote_name}.id")
 
     query_name = f"Please provide your full name for git remote {remote_name}: "
@@ -133,7 +130,7 @@ def dump_git_id_info(remote_name, cubi_config_dir):
 
 
 def check_cubi_config_dir(user_set_dir):
-
+    raise DeprecationWarning("This function is deprecated")
     cubi_cfg_dir = None
     if not user_set_dir.is_dir():
         # if the option is left unchanged,
@@ -162,6 +159,7 @@ def check_cubi_config_dir(user_set_dir):
 
 
 def parse_git_url(url):
+    raise DeprecationWarning("This function is deprecated")
     try:
         prefix, remainder = url.split("@")
     except ValueError:
@@ -197,6 +195,7 @@ def parse_git_url(url):
 
 
 def build_default_remote_infos(remote_name, repo_name):
+    raise DeprecationWarning("This function is deprecated")
     remote_path = None
     for remote_url, remote_specs in KNOWN_GIT_REMOTES.items():
         if remote_specs.name != remote_name:
@@ -210,6 +209,7 @@ def build_default_remote_infos(remote_name, repo_name):
 
 
 def set_push_targets(git_infos, wd, dry_run):
+    raise DeprecationWarning("This function is deprecated")
     all_remote_paths = []
     for remote_url, remote in KNOWN_GIT_REMOTES.items():
         remote_git_path = f"git@{remote_url}:{remote.org}/{git_infos['repo_name']}.git"
@@ -234,6 +234,7 @@ def set_push_targets(git_infos, wd, dry_run):
 
 
 def get_git_id_settings(id_folder, remote_name):
+    raise DeprecationWarning("This function is deprecated")
     id_file = id_folder.joinpath(f"{remote_name}.id").resolve(strict=True)
     with open(id_file, "r") as id_content:
         id_name = id_content.readline().strip().strip('"')
@@ -246,6 +247,7 @@ def get_git_id_settings(id_folder, remote_name):
 
 
 def set_git_identity(git_infos, wd, id_folder, dry_run):
+    raise DeprecationWarning("This function is deprecated")
     primary_remote = git_infos["remote_name"]
     settings = get_git_id_settings(id_folder, primary_remote)
     for key, value in settings:
@@ -255,6 +257,7 @@ def set_git_identity(git_infos, wd, id_folder, dry_run):
 
 
 def execute_command(cmd, wd, dry_run):
+    raise DeprecationWarning("This function is deprecated")
     out = ""
     if dry_run:
         msg = f"\nWould execute...\n\tin directory: {wd}\n\tthis command: {cmd}\n"
@@ -272,6 +275,7 @@ def execute_command(cmd, wd, dry_run):
 
 
 def clone_git(args, wd):
+    raise DeprecationWarning("This function is deprecated")
     """Clone a repository, add
     all push target (default: yes);
     configure user name and email
@@ -286,6 +290,7 @@ def clone_git(args, wd):
 
 
 def norm_git(args):
+    raise DeprecationWarning("This function is deprecated")
     """Normalize remote name,
     add all push target (default: yes);
     configure user name and email
@@ -321,6 +326,7 @@ def norm_git(args):
 
 
 def init_git(args):
+    raise DeprecationWarning("This function is deprecated")
     # NB: git fails if dir not empty,
     # so check if it already exists
     # (proxy for non-empty)
@@ -359,27 +365,26 @@ def exec_git_module(args):
     if args.init is not None:
         repo = GitRepository(
             args.init,
-            CT_CONFIG.git_presets[args.git_preset],
+            CT_CONFIG.git_presets[args.git_preset],  # type: ignore
             args.dry_run, logger=LOGGER
         )
         repo.init_repo()
     elif args.norm is not None:
         repo = GitRepository(
             args.norm,
-            CT_CONFIG.git_presets[args.git_preset],
+            CT_CONFIG.git_presets[args.git_preset],  # type: ignore
             args.dry_run, logger=LOGGER
         )
         repo.norm_repo()
+    elif args.clone is not None:
+        repo  = GitRepository(
+            args.clone,
+            CT_CONFIG.git_presets[args.git_preset],  # type: ignore
+            args.dry_run, logger=LOGGER
+        )
+        repo.clone_repo()
     else:
         raise ValueError("No action specified")
-
-    # if args.clone is not None:
-    #     git_infos, wd = clone_git(args, wd)
-    # elif args.norm is not None:
-    #     assert args.norm.joinpath(".git").is_dir()
-    #     git_infos, wd = norm_git(args)
-    # else:
-
 
     if not args.no_usage_hints:
         hints = (

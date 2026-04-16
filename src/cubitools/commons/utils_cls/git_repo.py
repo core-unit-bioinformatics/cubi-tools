@@ -1,31 +1,87 @@
 
 import pathlib as pl
+import urllib.parse as urlp
 
+from cubitools.commons.enums import GitAuth
 from cubitools.commons.utils_cls.syscall import SysCallInterface
 
 
 class GitRepository:
 
-    def __init__(self, local_repo_path: pl.Path, git_preset, dry_run: bool, logger=None):
-        self.local_path = local_repo_path
-        self.repo_name = local_repo_path.name
+    def __init__(self, repo_uri: pl.Path|str, git_preset, dry_run: bool, logger=None):
+
+        self.logger = logger
+
+        if isinstance(repo_uri, str):
+            # this is the 'clone' operation, which means
+            # repo_uri is the remote URL
+            _, _, repo_name = self._parse_git_remote_url(repo_uri)
+            self.local_path = pl.Path.cwd().joinpath(repo_name)
+            self.repo_name = repo_name
+            self.remote_source = repo_uri
+        elif isinstance(repo_uri, pl.Path):
+            self.local_path = repo_uri
+            self.repo_name = self.local_path.name
+            self.remote_source = None
+        else:
+            raise TypeError(f"Unexpected type for local_repo_path: {type(repo_uri)} / {repo_uri}")
         if self.local_path.is_dir():
             wd = self.local_path
             self.is_git_repo = wd.joinpath(".git").is_dir()
         else:
-            wd = pl.Path(".").resolve(strict=True)
+            wd = pl.Path.cwd()
             self.is_git_repo = False
 
         self.git_exec = SysCallInterface(
             working_dir=wd, executable="git",
             dry_run=dry_run, logger=logger
         )
+        _major, _minor, _patch = self.git_exec.exec_version.split(".")
+        if int(_major) < 2 and int(_minor) < 24:
+            err_msg = (
+                f"Git version {self.git_exec.exec_version} is too old for "
+                "cubitools - please upgrade to git v2.24 or higher"
+            )
+            if self.logger is not None:
+                self.logger.error(err_msg)
+            raise RuntimeError(err_msg)
         self.git_preset = git_preset
-        self.logger = logger
         self.user_name = git_preset.local_user.name
         self.user_email = git_preset.local_user.email
         self.active_remotes = None
         return None
+
+    def _parse_git_remote_url(self, remote_url):
+        """_parse_git_remote_url _summary_
+
+        Args:
+            remote_url (_type_): _description_
+        """
+        if remote_url.startswith("git@"):
+            # ssh url
+            auth_type = GitAuth.ssh
+            # mock the url to correct form
+            parse_this = remote_url.replace(":", "/").replace("git@", "https://")
+            parsed = urlp.urlparse(parse_this)
+        else:
+            # assume https url
+            auth_type = GitAuth.https
+            parsed = urlp.urlparse(remote_url)
+            assert parsed.scheme == GitAuth.https.name, f"Unexpected URL scheme in git remote URL: {remote_url}"
+
+        server = parsed.hostname
+        handle = parsed.path.strip("/").split("/")[0]
+        if not parsed.path.endswith(".git"):
+            raise ValueError(f"Remote URL is not a git repo: {remote_url}")
+        repo_name = parsed.path.split("/")[-1].rsplit(".", 1)[0]
+
+        if auth_type == GitAuth.https:
+            if self.logger is not None:
+                self.logger.warning(
+                    f"Remote URL uses HTTPS authentication, which is discouraged for development work: {remote_url}"
+                )
+
+        return server, handle, repo_name
 
     def _build_git_remote_url(self, remote, account):
         """_build_git_remote_url _summary_
@@ -151,6 +207,9 @@ class GitRepository:
             if self.logger is not None:
                 self.logger.debug(f"Adding remote push target for 'all': {remote_name} / {remote_url}")
             self.git_exec.run(["remote", "set-url", "--add", "--push", "all", remote_url])
+
+        # this is safe to set here
+        self.remote_source = prio_remote_url
         return None
 
     def init_repo(self):
@@ -197,4 +256,31 @@ class GitRepository:
         self.active_remotes = self._parse_remotes()
         if self.logger is not None:
             self.logger.debug("Normalizing existing repo - done")
+        return None
+
+    def clone_repo(self):
+        """clone_repo _summary_
+        """
+        if self.logger is not None:
+            self.logger.debug(f"Cloning new repo into: {self.local_path}")
+        if self.is_git_repo:
+            err_msg = (
+                "Cannot clone git repository because path already exists and is a "
+                f"git repository: {self.local_path}"
+            )
+            if self.logger is not None:
+                self.logger.error(err_msg)
+            raise RuntimeError(err_msg)
+        assert self.remote_source is not None, "Remote source URL must be set to clone repository"
+        self.git_exec.run(["clone", self.remote_source, str(self.local_path)])
+        if not self.git_exec.dry_run:
+            # we encapsulate all of this because
+            # the necessary change in the 'wd' of
+            # git_exec
+            self.git_exec.set_wd(self.local_path)
+            self.is_git_repo = True
+            self.norm_repo()
+
+        if self.logger is not None:
+            self.logger.debug(f"Cloning of repo - done")
         return None
