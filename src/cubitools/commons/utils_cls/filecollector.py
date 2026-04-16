@@ -31,11 +31,10 @@ class FileCollector:
             pass
         else:
             for glob_pattern in glob_patterns:
-                _up_pat = glob_pattern.upper()
-                if _up_pat == PathType.HIDDEN.name:
+                if glob_pattern == PathType.hidden.name:
                     # check for: is hidden
                     matcher = self._get_match_hidden()
-                elif _up_pat == PathType.SYMBOLIC.name:
+                elif glob_pattern == PathType.symbolic.name:
                     if match_filename:
                         pass
                     else:
