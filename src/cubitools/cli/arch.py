@@ -9,7 +9,7 @@ import time
 
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.enums import Compression, PathType, Checksum, FileManifestType
+from cubitools.commons.enums import Compression, PathType, PathComponent, Checksum, FileManifestType
 from cubitools.commons.utils_cls.file import File
 from cubitools.commons.utils_cls.filesize import FileSize
 from cubitools.commons.utils_cls.filecollector import FileCollector
@@ -338,7 +338,7 @@ def write_tar_file_listing(work_package):
     relative_paths = []
     for file in work_package.arch_files:
         assert file.rel_base == work_package.arch_dir
-        relative_paths.append(file.get_fofn_entry("parent"))
+        relative_paths.append(file.get_fofn_entry(PathComponent.parent))
 
     if not work_package.dry_run:
         with open(fofn_file, "w") as listing:
