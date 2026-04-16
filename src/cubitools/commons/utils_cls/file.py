@@ -3,7 +3,7 @@ import os
 import pathlib as pl
 import re
 
-from cubitools.commons.enums import FileSizeUnit
+from cubitools.commons.enums import FileSizeUnit, ChecksumLength, FileManifestType
 
 from cubitools.commons.utils_cls.filesize import FileSize
 
@@ -85,7 +85,14 @@ class File:
     @abs_path.setter
     def abs_path(self, path: str|pl.Path) -> None:
         try:
-            self._abs_path = pl.Path(path).resolve()
+            self._abs_path = pl.Path(path).resolve(strict=False)
+            if self._abs_path.is_file():
+                self._exists = 1
+            else:
+                self._exists = 0
+            if self.rel_base is not None:
+                assert self.abs_path is not None  # calm pylint...
+                self.rel_path = self.abs_path.relative_to(self.rel_base)
         except TypeError:
             self._abs_path = None
 
@@ -130,7 +137,7 @@ class File:
     @md5.setter
     def md5(self, value: str|None) -> None:
         try:
-            self._validate_hash(value, 32)
+            self._validate_hash(value, ChecksumLength.md5)
             self._md5 = value
         except Exception as err:
             err.add_note("md5")
@@ -143,7 +150,7 @@ class File:
     @sha256.setter
     def sha256(self, value: str|None) -> None:
         try:
-            self._validate_hash(value, 64)
+            self._validate_hash(value, ChecksumLength.sha256)
             self._sha256 = value
         except Exception as err:
             err.add_note("sha256")
@@ -154,3 +161,95 @@ class File:
 
     def update(self):
         pass
+
+    def delete(self):
+        """Delete this file from the file system.
+        This sets this _exists member to 0 if the operation
+        succeeds or if a FileNotFoundError is raised.
+        If an IOError is raised, the _exists member is set to None
+        to indicate an unknown state.
+        As a side effect, the absolute path is set in case that
+        only the relative base and path are set.
+        """
+        try:
+            if self.abs_path is not None:
+                os.unlink(self.abs_path)
+            elif self.rel_base is not None and self.rel_path is not None:
+                abs_path = self.rel_base.joinpath(self.rel_path)
+                os.unlink(abs_path)
+                self.abs_path = abs_path
+            else:
+                self._exists = None
+        except FileNotFoundError:
+            self._exists = 0
+        except IOError:
+            self._exists = None
+        return
+
+    def get_fofn_entry(self, path_info=None):
+        """get_fofn_entry _summary_
+
+        Args:
+            path_info (_type_, optional): _description_. Defaults to None.
+        """
+        assert path_info in [None, "absolute", "relative", "parent"]
+        if path_info is None:
+            if self.abs_path is not None:
+                return self.abs_path.name
+            elif self.rel_path is not None:
+                return self.rel_path.name
+            else:
+                raise ValueError(f"Incomplete file record: {self}")
+        if path_info == "absolute":
+            assert self.abs_path is not None
+            return str(self.abs_path)
+        if path_info == "relative":
+            assert self.rel_path is not None
+            return str(self.rel_path)
+        assert self.rel_base is not None
+        assert self.rel_path is not None
+        self_parent = self.rel_base.name
+        rel_parent = pl.Path(self_parent).joinpath(self.rel_path)
+        return str(rel_parent)
+
+    def get_manifest_line(self, manifest_type):
+        """get_manifest_line _summary_
+
+        Args:
+            manifest_type (_type_): _description_
+        """
+        header = []
+        row = []
+        if manifest_type == FileManifestType.minimal:
+            header.append("filename")
+            path_entry = self.get_fofn_entry()
+        elif manifest_type == FileManifestType.complete:
+            header.append("filepath")
+            path_entry = self.get_fofn_entry("parent")
+        else:
+            raise RuntimeError(f"Unknown manifest type: {manifest_type}")
+        row.append(path_entry)
+        header.append("size")
+        row.append(str(self.size))
+
+        known_checksums = ChecksumLength.get_length_order()
+
+        for length, name in known_checksums:
+            try:
+                checksum = getattr(self, name)
+            except AttributeError:
+                continue
+            else:
+                if checksum is None:
+                    checksum = "n/a"
+                if manifest_type == FileManifestType.complete:
+                    header.append(name)
+                    row.append(checksum)
+                elif manifest_type == FileManifestType.minimal and checksum != "n/a":
+                    header.append(name)
+                    row.append(checksum)
+                    break
+                else:
+                    continue
+
+        return tuple(header), tuple(row)
