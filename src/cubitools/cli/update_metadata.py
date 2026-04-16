@@ -32,7 +32,7 @@ def parse_command_line():
         help="Show version and exit.",
     )
 
-    DEFAULT_WORKING_DIR = pl.Path(".").resolve(strict=True)
+    DEFAULT_WORKING_DIR =  pl.Path.cwd()
 
     if __py_version__.minor >= 13:
         parser.add_argument(
@@ -471,7 +471,7 @@ def print_dry_run_info(system_call, work_folder=None):
 
     if work_folder is None:
         # see above in parse_command_line() for the default working directory
-        wd = pl.Path(".").resolve(strict=True)
+        wd =  pl.Path.cwd()
     else:
         wd = work_folder
 

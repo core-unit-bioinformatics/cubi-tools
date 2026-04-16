@@ -9,15 +9,13 @@ import argparse as argp
 import os
 import shutil
 import hashlib
-import urllib
+import urllib.parse as urlparse
 
 import semver
 import toml
 
 from cubitools import __prog__, __license__, __version__
-from cubitools import __cubitools__
-from cubitools.constants import DEFAULT_WORKING_DIR, \
-    UPD_WF_DEFAULT_TEMPLATE_REPO
+from cubitools import __cubitools__, __py_version__
 
 
 def parse_command_line():
@@ -43,6 +41,8 @@ def parse_command_line():
         help="Workflow directory that is the target of the update operation.",
         required=True,
     )
+
+    UPD_WF_DEFAULT_TEMPLATE_REPO = "https://github.com/core-unit-bioinformatics/template-snakemake.git"
     parser.add_argument(
         "--template-workflow-repository",
         "--reference-repository",
@@ -95,8 +95,7 @@ def parse_command_line():
 
 def check_online_resource(uri):
 
-    url_parser = urllib.parse.urlparse
-    result = url_parser(uri)
+    result = urlparse.urlparse(uri)
     # No support for http - yes [!?]
     return result.scheme == "https"
 
@@ -151,8 +150,12 @@ def print_dry_run_info(system_call, work_folder=None):
         cmd = system_call
     assert isinstance(cmd, str)
 
+    # TODO
+    # this is a temporary solution to make this script working
+    # the working directory will just be cwd --- see also
+    # update_metadata.py about the same problem
     if work_folder is None:
-        wd = DEFAULT_WORKING_DIR
+        wd = pl.Path.cwd()
     else:
         wd = work_folder
 
@@ -470,6 +473,11 @@ def main():
     print(f"Workflow directory to be updated: {args.workflow_target}\n")
 
     workflow_template_local = args.workflow_source
+
+    # TODO
+    # this is a temporary solution to make this script working
+    # in the future, this will be configured via the cubitools config file
+    UPD_WF_DEFAULT_TEMPLATE_REPO = "https://github.com/core-unit-bioinformatics/template-snakemake.git"
 
     # check if user provided a local path as workflow template repo
     if pl.Path(workflow_template_local).resolve().is_dir():
