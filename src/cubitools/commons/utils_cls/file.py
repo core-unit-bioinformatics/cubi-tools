@@ -3,7 +3,8 @@ import os
 import pathlib as pl
 import re
 
-from cubitools.commons.enums import FileSizeUnit, ChecksumLength, FileManifestType
+from cubitools.commons.enums import FileSizeUnit, Checksum, ChecksumLength, \
+    FileManifestType, PathComponent
 
 from cubitools.commons.utils_cls.filesize import FileSize
 
@@ -15,18 +16,22 @@ class File:
     _exists: int|None = None
     _size: FileSize|None = None
     _md5: str|None = None
+    _sha1: str|None = None
     _sha256: str|None = None
 
     def __init__(self,
                  abs_path: str|pl.Path|None = None,
                  rel_path: str|pl.Path|None = None,
                  rel_base: str|pl.Path|None = None,
-                 md5: str|None = None, sha256: str|None = None
+                 md5: str|None = None,
+                 sha1: str|None = None,
+                 sha256: str|None = None
                 ):
         self.abs_path = abs_path  #type: ignore
         self.rel_path = rel_path  #type: ignore
         self.rel_base = rel_base  #type: ignore
         self.md5 = md5
+        self.sha1 = sha1
         self.sha256 = sha256
 
         self.__post_init__()
@@ -54,12 +59,21 @@ class File:
         return None
 
     def _set_file_size(self):
+        """Set the file size attribute (size in bye) if the file exists.
+        Note that this function is called in the __post_init__ function,
+        which ensures that abs_path is set.
+
+        Returns:
+            _type_: _description_
+        """
         assert self.abs_path is not None
         if self.abs_path.is_file():
             finfo = os.stat(self.abs_path)
             file_size = finfo.st_size
             self.size = file_size
             self._exists = 1
+        else:
+            self._exists = 0
         return None
 
     def _validate_hash(self, hash, fixed_length) -> None:
@@ -140,7 +154,20 @@ class File:
             self._validate_hash(value, ChecksumLength.md5)
             self._md5 = value
         except Exception as err:
-            err.add_note("md5")
+            err.add_note(Checksum.md5.name)
+            raise
+
+    @property
+    def sha1(self) -> str|None:
+        return self._sha1
+
+    @sha1.setter
+    def sha1(self, value: str|None) -> None:
+        try:
+            self._validate_hash(value, ChecksumLength.sha1)
+            self._sha1 = value
+        except Exception as err:
+            err.add_note(Checksum.sha1.name)
             raise
 
     @property
@@ -153,7 +180,7 @@ class File:
             self._validate_hash(value, ChecksumLength.sha256)
             self._sha256 = value
         except Exception as err:
-            err.add_note("sha256")
+            err.add_note(Checksum.sha256.name)
             raise
 
     def get_unit_size(self, unit: FileSizeUnit) -> int|float:
@@ -186,31 +213,38 @@ class File:
             self._exists = None
         return
 
-    def get_fofn_entry(self, path_info=None):
+    def get_fofn_entry(self, path_info=PathComponent.filename) -> str:
         """get_fofn_entry _summary_
 
         Args:
             path_info (_type_, optional): _description_. Defaults to None.
         """
-        assert path_info in [None, "absolute", "relative", "parent"]
-        if path_info is None:
+        try:
+            path_info = PathComponent[path_info]  # type: ignore
+        except KeyError:
+            path_info = PathComponent(path_info)
+
+        fofn_entry = None
+        if path_info == PathComponent.filename:
             if self.abs_path is not None:
-                return self.abs_path.name
+                fofn_entry = self.abs_path.name
             elif self.rel_path is not None:
-                return self.rel_path.name
+                fofn_entry = self.rel_path.name
             else:
                 raise ValueError(f"Incomplete file record: {self}")
-        if path_info == "absolute":
+        elif path_info == PathComponent.absolute:
             assert self.abs_path is not None
-            return str(self.abs_path)
-        if path_info == "relative":
+            fofn_entry = self.abs_path
+        elif path_info == PathComponent.relative:
             assert self.rel_path is not None
-            return str(self.rel_path)
-        assert self.rel_base is not None
-        assert self.rel_path is not None
-        self_parent = self.rel_base.name
-        rel_parent = pl.Path(self_parent).joinpath(self.rel_path)
-        return str(rel_parent)
+            fofn_entry = self.rel_path
+        else:
+            assert self.rel_base is not None
+            assert self.rel_path is not None
+            self_parent = self.rel_base.name
+            rel_parent = pl.Path(self_parent).joinpath(self.rel_path)
+            fofn_entry = rel_parent
+        return str(fofn_entry)
 
     def get_manifest_line(self, manifest_type):
         """get_manifest_line _summary_
@@ -218,6 +252,11 @@ class File:
         Args:
             manifest_type (_type_): _description_
         """
+        try:
+            manifest_type = FileManifestType[manifest_type]  # type: ignore
+        except KeyError:
+            manifest_type = FileManifestType(manifest_type)
+
         header = []
         row = []
         if manifest_type == FileManifestType.minimal:
@@ -225,7 +264,7 @@ class File:
             path_entry = self.get_fofn_entry()
         elif manifest_type == FileManifestType.complete:
             header.append("filepath")
-            path_entry = self.get_fofn_entry("parent")
+            path_entry = self.get_fofn_entry(PathComponent.parent)
         else:
             raise RuntimeError(f"Unknown manifest type: {manifest_type}")
         row.append(path_entry)
