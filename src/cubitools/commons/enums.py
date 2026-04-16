@@ -16,15 +16,28 @@ class FileSizeUnit(enum.Enum):
     t = 4
 
 
+class FileManifestType(enum.Enum):
+    complete = 0
+    minimal = 1
+    skip = 2
+
+
 class PathType(enum.Enum):
-    REGULAR = 0
-    HIDDEN = 1
-    SYMBOLIC = 2
+    regular = 0
+    hidden = 1
+    symbolic = 2
+
+
+class PathComponent(enum.Enum):
+    filename = 0
+    absolute = 1
+    relative = 2
+    parent = 3
 
 
 class Compression(enum.Enum):
-    gzip = 0
     gz = 0
+    gzip = 0
     xz = 1
 
 
@@ -39,3 +52,12 @@ class ChecksumLength:
     md5: int = 32
     sha1: int = 40
     sha256: int = 64
+
+    @classmethod
+    def get_length_order(cls):
+        """get_length_order
+        """
+        ordered = sorted(
+            [(f.default, f.name) for f in dataclasses.fields(cls)]
+        )
+        return ordered
