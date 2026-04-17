@@ -54,19 +54,3 @@ if __debug_run__:
 else:
     __STRUCT_INIT_LOG_HANDLER.setLevel(logging.WARNING)
 __STRUCT_INIT_LOG_HANDLER.setFormatter(__STRUCT_INIT_LOG_FMT)
-
-
-# ===============
-# for tool ct-git
-GitRemote = collections.namedtuple(
-    "GitRemote", ["name", "org", "priority", "url"]
-)
-
-# TODO
-# Turn this into a full class
-# with each instance representing
-# a git repository
-KNOWN_GIT_REMOTES = {
-    "github.com": GitRemote("github", "core-unit-bioinformatics", 1, "github.com"),
-    "git.hhu.de": GitRemote("githhu", "cubi", 0, "git.hhu.de"),
-}
