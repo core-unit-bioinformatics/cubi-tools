@@ -18,7 +18,7 @@ files.
 The `ct-upd-wf` tool has no *offline* mode and thus needs an active
 internet connection to access the following template repository:
 
-`github.com/core-unit-bioinformatics/template-snakemake.git`
+`cubitools git --clone git@github.com/core-unit-bioinformatics/template-snakemake.git`
 
 At the moment, this tool only support the Snakemake workflow template.
 

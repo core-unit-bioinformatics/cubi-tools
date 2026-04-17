@@ -21,7 +21,7 @@ repository on the local machine:
 
 Run this before disconnecting from the internet:
 
-`ct-git --clone git@github.com:core-unit-bioinformatics/template-metadata-files.git`
+`cubitools git --clone git@github.com:core-unit-bioinformatics/template-metadata-files.git`
 
 ### Running the update
 
