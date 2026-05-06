@@ -157,6 +157,15 @@ class GitRepository:
                                 f"Remote '{remote.name}' already set for repo: {self.repo_name}"
                             )
                         set_remotes[remote.name] = remote_url
+                        # fix: add to priority remote if applicable
+                        if remote.priority > 0:
+                            if self.logger is not None:
+                                self.logger.debug(
+                                    f"Remote '{remote.name}' is high priority for repo {self.repo_name} "
+                                    "- adding to list of candidates for 'all' remote"
+                                )
+                            high_prio_remote.append(remote)
+                            high_prio_remote.append(remote_url)
                         continue
                     else:
                         self._remove_remote(remote.name)
@@ -176,6 +185,9 @@ class GitRepository:
                     self._remove_remote(active_remote_name)
 
         if len(set_remotes) > 1:
+            # the following is non-obious and a candidate for improving
+            # the code: it's 2 (and not 1) because the high-priority
+            # remote is stored as a pair of remote and remote_url
             if len(high_prio_remote) != 2:
                 n_remotes = len(set_remotes)
                 err_msg = (
@@ -188,6 +200,9 @@ class GitRepository:
                     self.logger.error(err_msg)
                 raise RuntimeError(err_msg)
             # set virtual all remote, targeting primary remote
+            # note that a repeated call to git_repo.norm() will first
+            # delete the 'all' remote and then re-create it (if applicable),
+            # no need to check if it already exists
             self._set_all_target(high_prio_remote[0], high_prio_remote[1], set_remotes)
         return None
 
