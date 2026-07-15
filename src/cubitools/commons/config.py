@@ -99,7 +99,7 @@ class CubiToolsConfig:
         except KeyError:
             # TODO - unclear what should
             # happen right *here*
-            raise
+            git_presets = ["ERROR_NO_PRESETS"]
         return git_presets
 
 
