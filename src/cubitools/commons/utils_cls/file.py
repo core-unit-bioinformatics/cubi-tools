@@ -265,11 +265,14 @@ class File:
         elif manifest_type == FileManifestType.complete:
             header.append("filepath")
             path_entry = self.get_fofn_entry(PathComponent.parent)
+        elif manifest_type == FileManifestType.coreutils:
+            path_entry = self.get_fofn_entry(PathComponent.relative)
         else:
             raise RuntimeError(f"Unknown manifest type: {manifest_type}")
         row.append(path_entry)
-        header.append("size")
-        row.append(str(self.size))
+        if manifest_type != FileManifestType.coreutils:
+            header.append("size")
+            row.append(str(self.size))
 
         known_checksums = ChecksumLength.get_length_order()
 
@@ -288,7 +291,15 @@ class File:
                     header.append(name)
                     row.append(checksum)
                     break
+                elif manifest_type == FileManifestType.coreutils and checksum != "n/a":
+                    row.append(checksum)
+                    break
                 else:
                     continue
+
+        if manifest_type == FileManifestType.coreutils:
+            # coreutils manifest needs to switch order,
+            # first report checksum and then filename
+            row = row[::-1]
 
         return tuple(header), tuple(row)
