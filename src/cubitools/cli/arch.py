@@ -30,7 +30,8 @@ ArchiveWorkPackage = col.namedtuple(
     [
         "arch_dir", "batch_num", "compression",
         "out_prefix", "scratch_dir", "arch_files",
-        "manifest", "manifest_header", "dry_run", "cleanup"
+        "manifest", "manifest_header", "manifest_only",
+        "dry_run", "cleanup"
     ]
 )
 
@@ -125,9 +126,18 @@ def get_subcommand_parser(subparsers):
             "Select the type of the file manifest to be created: "
             "(1) complete: list relative file path, size and all computed checksums "
             "(2) minimal: list only file name, size and shortest checksum available (typically, that is md5) "
-            "(3) skip: do not create a file manifest (discouraged). "
+            "(3) coreutils: list relative file path and checksum (format is compatible to GNU coreutils md5sum, sha1sum etc.) "
+            "(4) skip: do not create a file manifest (discouraged). "
             f"Default: {FileManifestType.complete.name}"
         )
+    )
+
+    parser.add_argument(
+        "--manifest-only", "-mly",
+        action="store_true",
+        default=False,
+        dest="manifest_only",
+        help="Only create the file manifest(s) and skip creating the tar archive(s). Default: False"
     )
 
     parser.add_argument(
@@ -340,7 +350,13 @@ def write_tar_file_listing(work_package):
         assert file.rel_base == work_package.arch_dir
         relative_paths.append(file.get_fofn_entry(PathComponent.parent))
 
-    if not work_package.dry_run:
+    if work_package.manifest_only:
+        # won't create the archive
+        pass
+    elif work_package.dry_run:
+        # don't create any output
+        pass
+    else:
         with open(fofn_file, "w") as listing:
             _ = listing.write("\n".join(sorted(relative_paths)) + "\n")
 
@@ -356,6 +372,10 @@ def manifest_has_header(manifest_file):
     try:
         with open(manifest_file, "r") as table:
             first_line = table.readline().strip().split()
+            if len(first_line) < 3:
+                # this must be a coreutils-style manifest,
+                # which does not have a header
+                return False
             # 2nd column is always size, i.e. an integer
             # if the file does not have a header
             _ = int(first_line[1])
@@ -479,7 +499,11 @@ def archive_worker(recvq, sendq):
             tar_target = scratch_out
         else:
             tar_target = final_out
-        sci = SysCallInterface(working_dir=work_pkg.arch_dir.parent, dry_run=work_pkg.dry_run)
+
+        if work_pkg.manifest_only:
+            sci = SysCallInterface(working_dir=work_pkg.arch_dir.parent, dry_run=True)
+        else:
+            sci = SysCallInterface(working_dir=work_pkg.arch_dir.parent, dry_run=work_pkg.dry_run)
         try:
             sci.run(
                 [
@@ -516,7 +540,7 @@ def archive_worker(recvq, sendq):
             perform_cleanup(to_delete)
 
         assert final_out is not None
-        if not work_pkg.dry_run:
+        if not (work_pkg.dry_run or work_pkg.manifest_only):
             assert final_out.is_file()
 
         if work_pkg.cleanup and not work_pkg.dry_run:
@@ -546,7 +570,7 @@ def archive_folders(file_batches, args):
         work_pkg = ArchiveWorkPackage(
             sub_folder, bnum, args.compression,
             args.out_prefix, args.scratch_dir, arch_files,
-            args.manifest, args.manifest_header,
+            args.manifest, args.manifest_header, args.manifest_only,
             args.dry_run, args.cleanup
         )
         sendq.put(work_pkg)
@@ -618,6 +642,29 @@ def exec_arch_module(args):
 
     required_checksums = [Checksum[chksum] for chksum in args.checksums]
 
+    manifest_type = FileManifestType[args.manifest]
+    if manifest_type == FileManifestType.coreutils:
+        if len(required_checksums) > 1:
+            LOGGER.debug(
+                "You selected a coreutils-style manifest but requested "
+                "more than one checksum to be computed. Please specify "
+                "only one checksum for this manifest type."
+            )
+            raise ValueError(
+                f"Coreutils-style manifest requires exactly one checksum to be computed: {required_checksums}"
+            )
+        if args.manifest_header:
+            LOGGER.warning(
+                "You selected a coreutils-style manifest but requested "
+                "a header row to be added. This is not compatible with "
+                "the coreutils format and will be ignored."
+            )
+            setattr(args, "manifest_header", False)
+
+    # important to check for feasible chunk limit before
+    # the checksum computation (potentially) starts
+    check_chunk_limit(chunk_limit, file_collector)
+
     if args.dry_run:
         LOGGER.info("Dry run set - skipping checksum computation")
     else:
@@ -628,8 +675,6 @@ def exec_arch_module(args):
             ctfiles.get_files_iter(collected_files),
             required_checksums, args.jobs, LOGGER
         )
-
-    check_chunk_limit(chunk_limit, file_collector)
 
     file_batches = group_files_in_batches(collected_files, chunk_limit, size_per_dir)
     _ = archive_folders(file_batches, args)
