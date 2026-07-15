@@ -19,7 +19,8 @@ class FileSizeUnit(enum.Enum):
 class FileManifestType(enum.Enum):
     complete = 0
     minimal = 1
-    skip = 2
+    coreutils = 2
+    skip = 3
 
 
 class PathType(enum.Enum):
