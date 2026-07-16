@@ -30,6 +30,22 @@ instructions to install the CUBI Tools inside a dedicated Conda environment.
 3. Install the CUBI tools:
     - `pip install .`
 
+
+### Alternative: build the container
+
+```bash
+# check out repository as above
+# the current container build is limited to the
+# latest release from the "dev" branch
+$ apptainer build cubitools.sif container/cubitools.def
+
+# run as follows:
+$ apptainer run cubitools.sif --help
+$ ./cubitools arch --help  # arch subcommand
+$ ./cubitools.sif --help
+$ apptainer exec cubitools.sif cubitools --help
+```
+
 # CLI tools available after installation
 
 For details, please refer to the command line help of each tool (`--help`).

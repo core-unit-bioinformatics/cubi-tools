@@ -1,0 +1,48 @@
+BootStrap: docker
+From: python:3.11-slim
+
+%labels
+    Author "Core Unit Bioinformatics"
+    Description "CUBI Tools - Utility scripts of the Core Unit Bioinformatics"
+    Homepage "https://github.com/core-unit-bioinformatics/cubi-tools"
+
+%environment
+    export PATH="/usr/local/bin:$PATH"
+    export PYTHONUNBUFFERED=1
+
+%post
+    # Update system packages
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        git \
+        build-essential \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+    # Install Python build dependencies
+    pip install --upgrade pip setuptools setuptools-scm wheel
+
+    # Clone the repository and checkout latest tagged release on dev branch
+    git clone https://github.com/core-unit-bioinformatics/cubi-tools.git /tmp/cubi-tools
+    cd /tmp/cubi-tools
+    git fetch --tags
+    LATEST_TAG=$(git tag --list --merged dev --sort=-version:refname | head -n 1)
+    if [ -z "$LATEST_TAG" ]; then
+        LATEST_TAG=$(git tag --list --sort=-version:refname | head -n 1)
+    fi
+    git checkout "$LATEST_TAG"
+
+    # Set dynamic version label
+    echo "Version=$LATEST_TAG" >> "$APPTAINER_LABELS"
+
+    # Install cubitools
+    pip install .
+
+    # Clean up build artifacts
+    rm -rf /tmp/cubi-tools
+
+%runscript
+    exec cubitools "$@"
+
+%startscript
+    exec cubitools "$@"
