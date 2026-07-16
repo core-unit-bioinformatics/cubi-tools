@@ -34,7 +34,7 @@ instructions to install the CUBI Tools inside a dedicated Conda environment.
 
 For details, please refer to the command line help of each tool (`--help`).
 
-- `cubitools arch`: create tar archives for cold data, with optional size limiting and file manifest creation (DOCS missing)
+- `cubitools arch`: create tar archives for cold data, with optional size limiting and file manifest creation -> [cubitools arch docs](docs/tools/arch.md)
 - `cubitools git`: automate initializing, cloning and normalizing git repositories -> [cubitools git docs](docs/tools/git.md)
 - `ct-upd-md`: creates or updates metadata files in a CUBI repository -> [ct-upd-md docs](docs/tools/update_metadata.md)
 - `ct-upd-wf`: creates or updates the CUBI (Snakemake) workflow template in a CUBI repository -> [ct-upd-wf docs](docs/tools/update_workflow.md)
