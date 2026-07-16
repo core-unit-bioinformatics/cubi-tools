@@ -23,6 +23,13 @@ class FileManifestType(enum.Enum):
     skip = 3
 
 
+@dataclasses.dataclass(frozen=True)
+class FileManifestExt:
+    complete: str = "cmpl.manifest.tsv"
+    minimal: str = "mnml.manifest.tsv"
+    coreutils: str = "core.manifest.tsv"
+
+
 class PathType(enum.Enum):
     regular = 0
     hidden = 1
