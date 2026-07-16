@@ -30,7 +30,7 @@ ArchiveWorkPackage = col.namedtuple(
     [
         "arch_dir", "batch_num", "compression",
         "out_prefix", "scratch_dir", "arch_files",
-        "manifest", "manifest_header", "manifest_only",
+        "manifest", "no_manifest_header", "manifest_only",
         "dry_run", "cleanup"
     ]
 )
@@ -141,11 +141,11 @@ def get_subcommand_parser(subparsers):
     )
 
     parser.add_argument(
-        "--manifest-header", "-mhd",
+        "--no-manifest-header", "-nhd",
         action="store_true",
         default=False,
-        dest="manifest_header",
-        help="Add a header row to the file manifest output. Default: False"
+        dest="no_manifest_header",
+        help="Do not add a header row to the file manifest output. Default: False"
     )
 
     parser.add_argument(
@@ -409,7 +409,9 @@ def write_file_manifest(basename, work_package):
 
     if not work_package.dry_run:
         with open(manifest_file, "w") as table:
-            if work_package.manifest_header:
+            if work_package.no_manifest_header:
+                pass
+            else:
                 assert manifest_header is not None
                 _ = table.write("\t".join(manifest_header) + "\n")
 
@@ -570,7 +572,7 @@ def archive_folders(file_batches, args):
         work_pkg = ArchiveWorkPackage(
             sub_folder, bnum, args.compression,
             args.out_prefix, args.scratch_dir, arch_files,
-            args.manifest, args.manifest_header, args.manifest_only,
+            args.manifest, args.no_manifest_header, args.manifest_only,
             args.dry_run, args.cleanup
         )
         sendq.put(work_pkg)
@@ -653,13 +655,15 @@ def exec_arch_module(args):
             raise ValueError(
                 f"Coreutils-style manifest requires exactly one checksum to be computed: {required_checksums}"
             )
-        if args.manifest_header:
+        if args.no_manifest_header:
+            pass
+        else:
             LOGGER.warning(
                 "You selected a coreutils-style manifest but requested "
                 "a header row to be added. This is not compatible with "
                 "the coreutils format and will be ignored."
             )
-            setattr(args, "manifest_header", False)
+            setattr(args, "no_manifest_header", True)
 
     # important to check for feasible chunk limit before
     # the checksum computation (potentially) starts
