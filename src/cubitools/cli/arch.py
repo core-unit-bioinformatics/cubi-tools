@@ -92,13 +92,13 @@ def get_subcommand_parser(subparsers):
     parser.add_argument(
         "--chunk-limit", "-lim",
         type=str,
-        default="4t",
+        default="1t",
         dest="chunk_limit",
         help=(
             "Limit the size of the resulting tar archive, i.e. "
             "create several chunks not larger than this limit "
             "if necessary. Set to -1 to deactivate. "
-            "Default: 4t[erabyte]"
+            "Default: 1t[erabyte]"
         )
     )
 
