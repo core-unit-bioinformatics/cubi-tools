@@ -40,6 +40,40 @@ def _checksum_worker(inq, outq):
     return None
 
 
+def add_checksum_to_file(file: File, checksum: Checksum, logger):
+    """add_checksum_to_file _summary_
+
+    Args:
+        file (File): _description_
+        checksum (Checksum): _description_
+        logger (_type_): _description_
+    """
+    sci_exec = f"{checksum.name.lower()}sum"
+    sci = SysCallInterface(executable=sci_exec)
+    if file.abs_path is None and file.rel_path is None:
+        err_msg = (
+            f"Cannot compute checksum {checksum} for file {file}. "
+            "No absolute or relative path is set."
+        )
+        logger.error(err_msg)
+        raise RuntimeError(err_msg)
+    use_path = file.abs_path if file.abs_path is not None else file.rel_path
+    use_path = str(use_path.resolve(strict=True))  # type: ignore
+    try:
+        stdout, _ = sci.run([use_path])
+        checksum_value, _ = stdout.strip().split(maxsplit=1)
+    except ValueError as verr:
+        err_msg = (
+            f"Error computing checksum {checksum} "
+            f"for file {file.abs_path}"
+        )
+        verr.add_note(err_msg)
+        raise
+    attr_name = checksum.name.lower()
+    setattr(file, attr_name, checksum_value)
+    return None
+
+
 def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list[Checksum], jobs: int, logger):
 
     sync_man = mp.Manager()
