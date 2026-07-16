@@ -197,7 +197,7 @@ class FileCollector:
                 collected_files.append(fobj)
         num_files = len(collected_files)
         if num_files == 0:
-            min_file_size = 0
+            min_file_size = FileSize(0)
         else:
             min_file_size = FileSize(min_file_size)
         max_file_size = FileSize(max_file_size)
