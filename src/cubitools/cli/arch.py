@@ -9,7 +9,7 @@ import time
 
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.enums import Compression, PathType, PathComponent, Checksum, FileManifestType
+from cubitools.commons.enums import Compression, PathType, PathComponent, Checksum, FileManifestType, FileManifestExt
 from cubitools.commons.utils_cls.file import File
 from cubitools.commons.utils_cls.filesize import FileSize
 from cubitools.commons.utils_cls.filecollector import FileCollector
@@ -392,11 +392,13 @@ def write_file_manifest(basename, work_package):
         fofn_file (_type_): _description_
         work_package (_type_): _description_
     """
-    file_name = basename + "manifest.tsv"
-    manifest_file = work_package.out_prefix.parent.joinpath(file_name)
     manifest_type = FileManifestType[work_package.manifest]
     if manifest_type == FileManifestType.skip:
         return None
+
+    manifest_ext = getattr(FileManifestExt, work_package.manifest)
+    file_name = basename + manifest_ext
+    manifest_file = work_package.out_prefix.parent.joinpath(file_name)
 
     manifest_header = None
     manifest_rows = []
@@ -543,7 +545,17 @@ def archive_worker(recvq, sendq):
 
         assert final_out is not None
         if not (work_pkg.dry_run or work_pkg.manifest_only):
-            assert final_out.is_file()
+
+            tar_file = File(abs_path=final_out.resolve(strict=True))
+
+            LOGGER.debug("Comuting checksum sha256 for tar archive")
+            ctchk.add_checksum_to_file(tar_file, Checksum.sha256, LOGGER)
+
+            tar_chk = str(tar_file.abs_path) + ".sha256"
+            LOGGER.debug(f"Dumping checksum file for tar to: {tar_chk}")
+
+            with open(tar_chk, "w") as chk_file:
+                _ = chk_file.write(f"{tar_file.sha256}  {final_out.name}\n")
 
         if work_pkg.cleanup and not work_pkg.dry_run:
             perform_cleanup(work_pkg.arch_files, remove_dirs=work_pkg.arch_dir)
@@ -659,9 +671,9 @@ def exec_arch_module(args):
             pass
         else:
             LOGGER.warning(
-                "You selected a coreutils-style manifest but requested "
-                "a header row to be added. This is not compatible with "
-                "the coreutils format and will be ignored."
+                "You selected a coreutils-style manifest, which must not have "
+                "a header row by construction. The '--no-manifest-header' option "
+                "will be set to 'True' automatically."
             )
             setattr(args, "no_manifest_header", True)
 
