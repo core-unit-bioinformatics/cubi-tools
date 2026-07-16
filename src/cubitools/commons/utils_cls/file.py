@@ -266,7 +266,7 @@ class File:
             header.append("filepath")
             path_entry = self.get_fofn_entry(PathComponent.parent)
         elif manifest_type == FileManifestType.coreutils:
-            path_entry = self.get_fofn_entry(PathComponent.relative)
+            path_entry = self.get_fofn_entry(PathComponent.parent)
         else:
             raise RuntimeError(f"Unknown manifest type: {manifest_type}")
         row.append(path_entry)
