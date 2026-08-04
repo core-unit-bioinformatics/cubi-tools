@@ -15,8 +15,10 @@ From: python:3.11-slim
     apt-get update
     apt-get install -y --no-install-recommends \
         git \
+        openssh-client \
         build-essential \
         ca-certificates \
+        libpam0g \
     && rm -rf /var/lib/apt/lists/*
 
     # Install Python build dependencies
