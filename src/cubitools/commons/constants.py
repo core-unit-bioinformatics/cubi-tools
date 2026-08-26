@@ -19,7 +19,7 @@ class CubiToolsConstants:
     log_file_name: str = "ct-run.log"
     env_file_name: str = "ct-env.toml"
     cfg_file_name: str = "ct-cfg.toml"
-    ct_subdir: str = "cubi-tools"
+    ct_subdir: str = "cubitools"
     # following: some important env keys
     # plus default values as recommended in
     # specifications.freedesktop.org/basedir/latest
