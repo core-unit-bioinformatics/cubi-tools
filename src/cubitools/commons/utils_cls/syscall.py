@@ -107,6 +107,7 @@ class SysCallInterface:
                     err_msg = cperr.stderr.strip().split()
                     err_msg = " /// ".join(err_msg)
                     msg = f"Returned stderr: {err_msg}"
+                    self.logger.error(msg)
                 # in this context, it cannot be determined
                 # if the error was a probable outcome or not,
                 # so handling needs to happen in the calling context
