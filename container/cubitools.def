@@ -9,6 +9,8 @@ From: python:3.11-slim
 %environment
     export PATH="/usr/local/bin:$PATH"
     export PYTHONUNBUFFERED=1
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
 
 %post
     # Update system packages
@@ -19,7 +21,17 @@ From: python:3.11-slim
         build-essential \
         ca-certificates \
         libpam0g \
+        stow \
     && rm -rf /var/lib/apt/lists/*
+
+    # the way the dotfiles repo is organized is only compatible
+    # with stow v2.4+ /// check here that we have that version
+    installed=$(stow --version | awk '/version/ {print $NF; exit}')
+
+    if [[ $(printf '%s\n' "$installed" "2.4.0" | sort -V | head -n1) != "2.4.0" ]]; then
+        echo "stow 2.4+ required, found $installed" >&2
+        exit 1
+    fi
 
     # Install Python build dependencies
     pip install --upgrade pip setuptools setuptools-scm wheel
@@ -44,7 +56,7 @@ From: python:3.11-slim
     rm -rf /tmp/cubi-tools
 
 %runscript
-    exec cubitools "$@"
+    exec "$@"
 
 %startscript
-    exec cubitools "$@"
+    exec "$@"
