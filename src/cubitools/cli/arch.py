@@ -589,7 +589,7 @@ def archive_folders(file_batches, args):
         )
         sendq.put(work_pkg)
 
-    LOGGER.debug(f"Adding sentinels to processing queue")
+    LOGGER.debug("Adding sentinels to processing queue")
     for _ in workers:
         sendq.put(None)
 
@@ -619,7 +619,7 @@ def archive_folders(file_batches, args):
             LOGGER.debug(f"Remaining active workers: {active_workers}")
             active_workers -= 1
         if active_workers < 1:
-            LOGGER.debug(f"All workers done - breaking out of while loop")
+            LOGGER.debug("All workers done - breaking out of while loop")
             break
 
     for p in workers:
