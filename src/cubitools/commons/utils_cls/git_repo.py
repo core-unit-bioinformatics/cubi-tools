@@ -273,6 +273,22 @@ class GitRepository:
             self.logger.debug("Normalizing existing repo - done")
         return None
 
+    def set_user(self):
+        """set_user _summary_
+        """
+        if not self.is_git_repo:
+            err_msg = (
+                "Cannot normalize git information in path because it is not a "
+                f"git repository: {self.local_path}"
+            )
+            if self.logger is not None:
+                self.logger.error(err_msg)
+            raise RuntimeError(err_msg)
+        self._set_user_config()
+        if self.logger is not None:
+            self.logger.debug("Setting user config for existing repo - done")
+        return None
+
     def clone_repo(self):
         """clone_repo _summary_
         """

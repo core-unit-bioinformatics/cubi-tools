@@ -82,6 +82,20 @@ def get_subcommand_parser(subparsers):
     )
 
     parser.add_argument(
+        "--only-user-cfg",
+        "-u",
+        action="store_true",
+        default=False,
+        dest="only_user_cfg",
+        help=(
+            "For the '--norm' operation, only set the user config "
+            "(name and email) according to the preset but do not "
+            "change the remotes. Is ignored for all other operations. "
+            "Default: False"
+        )
+    )
+
+    parser.add_argument(
         "--no-usage-hints", "-noh",
         action="store_true",
         default=False,
@@ -369,6 +383,13 @@ def exec_git_module(args):
             args.dry_run, logger=LOGGER
         )
         repo.init_repo()
+    elif args.norm is not None and args.only_user_cfg:
+        repo = GitRepository(
+            args.norm,
+            CT_CONFIG.git_presets[args.git_preset],  # type: ignore
+            args.dry_run, logger=LOGGER
+        )
+        repo.set_user()
     elif args.norm is not None:
         repo = GitRepository(
             args.norm,
