@@ -28,7 +28,7 @@ LOGGER = CubiToolsLogger(LOGGER_NAME)
 ArchiveWorkPackage = col.namedtuple(
     "ArchiveWorkPackage",
     [
-        "arch_dir", "batch_num", "compression",
+        "arch_dir", "batch_num", "batch_total", "compression",
         "out_prefix", "scratch_dir", "arch_files",
         "manifest", "no_manifest_header", "manifest_only",
         "dry_run", "cleanup"
@@ -331,7 +331,7 @@ def write_tar_file_listing(work_package):
     if work_package.batch_num == 0:
         infix = ""
     else:
-        infix = f"part{work_package.batch_num}."
+        infix = f"part{work_package.batch_num}v{work_package.batch_total}."
 
     # for the case of several input archive dirs,
     # we want to make it easier to identify the source
@@ -576,13 +576,14 @@ def archive_folders(file_batches, args):
     LOGGER.debug(f"Initialized {len(workers)} worker processes")
     [p.start() for p in workers]
 
+    batch_total = len(file_batches)
     for (sub_folder, batch_num, _), arch_files in file_batches.items():
         if len(file_batches) == 1:
             bnum = 0
         else:
             bnum = batch_num
         work_pkg = ArchiveWorkPackage(
-            sub_folder, bnum, args.compression,
+            sub_folder, bnum, batch_total, args.compression,
             args.out_prefix, args.scratch_dir, arch_files,
             args.manifest, args.no_manifest_header, args.manifest_only,
             args.dry_run, args.cleanup
