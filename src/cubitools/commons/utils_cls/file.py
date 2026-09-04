@@ -66,7 +66,7 @@ class File:
         Returns:
             _type_: _description_
         """
-        assert self.abs_path is not None
+        assert self.abs_path is not None, self.__str__()
         if self.abs_path.is_file():
             finfo = os.stat(self.abs_path)
             file_size = finfo.st_size
@@ -134,7 +134,7 @@ class File:
 
     @property
     def size(self) -> int:
-        assert self._size is not None
+        assert self._size is not None, self.__str__()
         return self._size.size
 
     @size.setter
@@ -233,14 +233,14 @@ class File:
             else:
                 raise ValueError(f"Incomplete file record: {self}")
         elif path_info == PathComponent.absolute:
-            assert self.abs_path is not None
+            assert self.abs_path is not None, self.__str__()
             fofn_entry = self.abs_path
         elif path_info == PathComponent.relative:
-            assert self.rel_path is not None
+            assert self.rel_path is not None, self.__str__()
             fofn_entry = self.rel_path
         else:
-            assert self.rel_base is not None
-            assert self.rel_path is not None
+            assert self.rel_base is not None, self.__str__()
+            assert self.rel_path is not None, self.__str__()
             self_parent = self.rel_base.name
             rel_parent = pl.Path(self_parent).joinpath(self.rel_path)
             fofn_entry = rel_parent
