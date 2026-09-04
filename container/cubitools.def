@@ -26,7 +26,7 @@ From: python:3.11-slim
         bzip3 \
         7zip \
         xz-utils \
-        gzip
+        gzip \
     && rm -rf /var/lib/apt/lists/*
 
     # the way the dotfiles repo is organized is only compatible
