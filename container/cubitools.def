@@ -22,6 +22,11 @@ From: python:3.11-slim
         ca-certificates \
         libpam0g \
         stow \
+        bzip2 \
+        bzip3 \
+        7zip \
+        xz-utils \
+        gzip
     && rm -rf /var/lib/apt/lists/*
 
     # the way the dotfiles repo is organized is only compatible
