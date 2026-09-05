@@ -347,6 +347,9 @@ def write_tar_file_listing(work_package):
 
     relative_paths = []
     for file in work_package.arch_files:
+        # this check here is indeed important because tar
+        # is later called with the -T option and the file
+        # listing is relative to the parent of arch_dir
         assert file.rel_base == work_package.arch_dir
         relative_paths.append(file.get_fofn_entry(PathComponent.parent))
 

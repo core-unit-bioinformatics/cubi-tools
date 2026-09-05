@@ -9,7 +9,11 @@ from cubitools.commons.enums import PathType
 
 from cubitools.commons.utils_cls.file import File
 from cubitools.commons.utils_cls.filesize import FileSize, FileSizeStats
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
 
+
+LOGGER_NAME = __name__
+LOGGER = CubiToolsLogger(LOGGER_NAME)
 
 class FileCollector:
     """The FileCollector class is responsible for collecting files from
@@ -27,6 +31,7 @@ class FileCollector:
         self._follow_symlink_dirs = False
         self.walked_dirs = dict()
         self._last_dir = None
+        self._exclude_symlinked_file = lambda _: False
         self._exclude_dir = self._init_matcher(exclude_dir, False, False)
         self._exclude_file = self._init_matcher(exclude_file, True, False)
         self._include_dir = self._init_matcher(include_dir, False, True)
@@ -45,14 +50,17 @@ class FileCollector:
                     matcher = self._get_match_hidden()
                 elif glob_pattern == PathType.symbolic.name:
                     if match_filename:
-                        pass
+                        # we cannot check for a symlink relative
+                        # to the file name only, i.e. this check
+                        # cannot be implemented like a filter
+                        # operation on the file names only.
+                        self._exclude_symlinked_file = self._get_match_symlink()
                     else:
                         # special setting for os.walk
                         if include:
                             self._follow_symlink_dirs = True
                         else:
                             self._follow_symlink_dirs = False
-                    matcher = self._get_match_symlink()
                 else:
                     # check for: fixed string match in fp
                     matcher = self._get_match_generic(glob_pattern)
@@ -205,11 +213,22 @@ class FileCollector:
             filenames = self.keep_files(filenames)
             for filename in filenames:
                 abs_path = pl.Path(toplevel, filename).absolute()
+                # check for the full path if it is a symnlink
+                if self._exclude_symlinked_file(abs_path):
+                    continue
                 # important: relative to archive/root dir
                 rel_path = abs_path.relative_to(root_dir)
                 fobj = File(abs_path=abs_path, rel_base=root_dir, rel_path=rel_path)
                 if fobj._exists == 0:
                     # silently skip over files that do not exist
+                    continue
+                if root_dir != fobj.rel_base:
+                    warn_msg = (
+                        f"File is outside of archive directory tree: {fobj.abs_path}. "
+                        "Skipping over file - if you want to include it, please add the "
+                        f"directory {fobj.rel_base} to the list of archive directories."
+                    )
+                    LOGGER.warning(warn_msg)
                     continue
                 max_file_size = max(max_file_size, fobj.size)
                 min_file_size = min(min_file_size, fobj.size)
@@ -228,5 +247,4 @@ class FileCollector:
             min_file_size, max_file_size
         )
         self._last_dir = root_dir
-        raise
         return collected_files
