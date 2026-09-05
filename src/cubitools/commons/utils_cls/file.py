@@ -10,6 +10,13 @@ from cubitools.commons.utils_cls.filesize import FileSize
 
 
 class File:
+    """The File class represents a file that either exists or
+    is supposed to exist in the file system. The latter case
+    has been implemented for the operation of updating repositories
+    of CUBI with, e.g., metadata or template information. In that
+    scenario, the file may not exist yet, but it is expected to be created
+    during the update process.
+    """
     _abs_path: pl.Path|None = None
     _rel_path: pl.Path|None = None
     _rel_base: pl.Path|None = None
@@ -99,6 +106,9 @@ class File:
     @abs_path.setter
     def abs_path(self, path: str|pl.Path) -> None:
         try:
+            # NB: the setter calls resolve() on the path, which
+            # will automically resolve symlinks. Desired handling of
+            # symlinks must happen outside of the scope of the File class.
             self._abs_path = pl.Path(path).resolve(strict=False)
             if self._abs_path.is_file():
                 self._exists = 1

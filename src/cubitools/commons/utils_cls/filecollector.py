@@ -12,6 +12,15 @@ from cubitools.commons.utils_cls.filesize import FileSize, FileSizeStats
 
 
 class FileCollector:
+    """The FileCollector class is responsible for collecting files from
+    a directory tree based on specified inclusion and exclusion criteria.
+    It provides methods to filter directories and files, collect file information,
+    and generate statistics about the collected files.
+
+    It's reason to exist is to collect files, so it is hardcoded that files
+    that currently do not exist (case: broken symlinks if symlinks are not per se
+    excluded) will be > SILENTLY < ignored / skipped over.
+    """
 
     def __init__(self, exclude_dir: list[str]|None, exclude_file: list[str]|None,
                  include_dir: list[str]|None, include_file: list[str]) -> None:
@@ -191,6 +200,9 @@ class FileCollector:
                 # important: relative to archive/root dir
                 rel_path = abs_path.relative_to(root_dir)
                 fobj = File(abs_path=abs_path, rel_base=root_dir, rel_path=rel_path)
+                if fobj._exists == 0:
+                    # silently skip over files that do not exist
+                    continue
                 max_file_size = max(max_file_size, fobj.size)
                 min_file_size = min(min_file_size, fobj.size)
                 total_file_size += fobj.size
