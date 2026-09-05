@@ -184,6 +184,14 @@ class FileCollector:
         return stats
 
     def collect_files(self, root_dir: pl.Path):
+        """
+        Collects files from the specified root directory.
+
+        Args:
+            root_dir (pl.Path): This is one of the user-supplied --archive-dirs
+        Returns:
+            list[File]: A list of File objects representing the collected files.
+        """
 
         max_file_size = 0
         min_file_size = sys.maxsize
@@ -196,7 +204,7 @@ class FileCollector:
             self.keep_dirs(subdirs)
             filenames = self.keep_files(filenames)
             for filename in filenames:
-                abs_path = pl.Path(toplevel, filename)
+                abs_path = pl.Path(toplevel, filename).absolute()
                 # important: relative to archive/root dir
                 rel_path = abs_path.relative_to(root_dir)
                 fobj = File(abs_path=abs_path, rel_base=root_dir, rel_path=rel_path)
@@ -220,5 +228,5 @@ class FileCollector:
             min_file_size, max_file_size
         )
         self._last_dir = root_dir
-
+        raise
         return collected_files

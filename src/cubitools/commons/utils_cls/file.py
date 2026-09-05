@@ -7,6 +7,11 @@ from cubitools.commons.enums import FileSizeUnit, Checksum, ChecksumLength, \
     FileManifestType, PathComponent
 
 from cubitools.commons.utils_cls.filesize import FileSize
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
+
+
+LOGGER_NAME = __name__
+LOGGER = CubiToolsLogger(LOGGER_NAME)
 
 
 class File:
@@ -34,9 +39,13 @@ class File:
                  sha1: str|None = None,
                  sha256: str|None = None
                 ):
-        self.abs_path = abs_path  #type: ignore
+        # order of operations matter in the case
+        # of symlinks; that is because the abs_path
+        # is set with a call to resolve(), so we
+        # can detect if the file is actually a symlink
         self.rel_path = rel_path  #type: ignore
         self.rel_base = rel_base  #type: ignore
+        self.abs_path = abs_path  #type: ignore
         self.md5 = md5
         self.sha1 = sha1
         self.sha256 = sha256
@@ -99,6 +108,33 @@ class File:
             raise TypeError(f"Expected hash to be of type string, not: {type(hash)}")
         return None
 
+    def _find_longest_common_prefix(self) -> pl.Path:
+        """Find the longest common path prefix between
+        self.abs_path and self.rel_base. If the prefix
+        is "/", raise an error.
+
+        Returns:
+            pl.Path: This path will be set as the new self.rel_base
+        """
+        assert self.abs_path is not None, self.__str__()
+        assert self.rel_base is not None, self.__str__()
+
+        abs_parents = set(list(self.abs_path.parents))
+        rel_parents = set(list(self.rel_base.parents))
+        lcp = sorted(
+            abs_parents.intersection(rel_parents),
+            reverse=True, key=lambda p: len(str(p))
+        )[0]
+        if lcp == pl.Path("/"):
+            err_msg = (
+                "Longest common path prefix is '/' (root) for "
+                f"{self.abs_path} and {self.rel_base}. "
+                "Aborting operation across file system boundaries."
+            )
+            LOGGER.error(err_msg)
+            raise RuntimeError("Corssing file system boundaries")
+        return lcp        
+
     @property
     def abs_path(self) -> pl.Path|None:
         return self._abs_path
@@ -116,7 +152,24 @@ class File:
                 self._exists = 0
             if self.rel_base is not None:
                 assert self.abs_path is not None  # calm pylint...
-                self.rel_path = self.abs_path.relative_to(self.rel_base)
+                try:
+                    self.rel_path = self.abs_path.relative_to(self.rel_base)
+                except ValueError:
+                    # this can happen if a symlink was resolved and the
+                    # actual file sits outside of the archive directory tree.
+                    warn_msg = (
+                        f"Cannot resolve relative path for file: {self.abs_path} --- "
+                        "This can happen, e.g., if a symlink points outside of the "
+                        "archive directory tree. I will reset the file information; "
+                        "If you want to avoid this, select to exclude symlinks "
+                        "with the CLI option --exclude-file symbolic "
+                    )
+                    LOGGER.warning(warn_msg)
+                    lcp = self._find_longest_common_prefix()
+                    self.rel_base = lcp
+                    self.rel_path = self.abs_path.relative_to(self.rel_base)
+                    assert self.rel_base.joinpath(self.rel_path) == self.abs_path, \
+                        self.__str__()
         except TypeError:
             self._abs_path = None
 
