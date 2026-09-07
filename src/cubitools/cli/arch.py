@@ -219,7 +219,11 @@ def collect_file_paths(archive_dirs, file_collector):
     size_per_dir = dict()
     for arch_dir in archive_dirs:
         LOGGER.debug(f"Walking directory {arch_dir}")
-        collected_files[arch_dir] = file_collector.collect_files(arch_dir)
+        arch_dir_files, skipped_files = file_collector.collect_files(arch_dir)
+        collected_files[arch_dir] = arch_dir_files
+        if skipped_files:
+            for fobj, reason in skipped_files:
+                LOGGER.warning(f"Skipped file: {fobj.abs_path} --- reason: {reason}")
         stats = file_collector.get_last_stats()
         size_per_dir[arch_dir] = stats.total_size
         LOGGER.debug(f"Files collected: {stats.total_files}")

@@ -25,11 +25,14 @@ class File:
     _abs_path: pl.Path|None = None
     _rel_path: pl.Path|None = None
     _rel_base: pl.Path|None = None
-    _exists: int|None = None
     _size: FileSize|None = None
     _md5: str|None = None
     _sha1: str|None = None
     _sha256: str|None = None
+    exists: bool|None = None
+    is_readable: bool|None = None
+    is_writable: bool|None = None
+
 
     def __init__(self,
                  abs_path: str|pl.Path|None = None,
@@ -72,6 +75,8 @@ class File:
             )
         else:
             pass
+        self._set_is_readable()
+        self._set_is_writable()
         return None
 
     def _set_file_size(self):
@@ -87,9 +92,30 @@ class File:
             finfo = os.stat(self.abs_path)
             file_size = finfo.st_size
             self.size = file_size
-            self._exists = 1
+            self.exists = True
         else:
-            self._exists = 0
+            self.exists = False
+        return None
+
+    def _set_is_readable(self) -> bool:
+        assert self.abs_path is not None, self.__str__()
+        if not self.exists:
+            self.is_readable = False
+        else:       
+            self.is_readable = os.access(self.abs_path, os.R_OK)
+        return None
+
+    def _set_is_writable(self) -> bool:
+        assert self.abs_path is not None, self.__str__()
+        if not self.exists:
+            # Why None for writable?
+            # The file 'could be' writable in the sense that
+            # it could be created if somewhere in the path
+            # of parent directories, there is a writable
+            # directory to begin with. But we do not check this here.
+            self.is_writable = None
+        else:
+            self.is_writable = os.access(self.abs_path, os.W_OK)
         return None
 
     def _validate_hash(self, hash, fixed_length) -> None:
@@ -147,9 +173,9 @@ class File:
             # symlinks must happen outside of the scope of the File class.
             self._abs_path = pl.Path(path).resolve(strict=False)
             if self._abs_path.is_file():
-                self._exists = 1
+                self.exists = True
             else:
-                self._exists = 0
+                self.exists = False
             if self.rel_base is not None:
                 assert self.abs_path is not None  # calm pylint...
                 try:
@@ -250,7 +276,15 @@ class File:
         return getattr(self._size, unit.name)
 
     def update(self):
-        pass
+        """Update the file information, e.g., if the file has been
+        modified or newly created, this will update the file size and
+        existence information.
+        """
+        assert self.abs_path is not None, self.__str__()
+        self._set_file_size()
+        self._set_is_readable()
+        self._set_is_writable()
+        return None
 
     def delete(self):
         """Delete this file from the file system.
@@ -264,16 +298,27 @@ class File:
         try:
             if self.abs_path is not None:
                 os.unlink(self.abs_path)
+                self.exists = False
+                self.is_readable = False
+                self.is_writable = None
             elif self.rel_base is not None and self.rel_path is not None:
                 abs_path = self.rel_base.joinpath(self.rel_path)
                 os.unlink(abs_path)
                 self.abs_path = abs_path
+                self.exists = False
+                self.is_readable = False
+                self.is_writable = None
             else:
-                self._exists = None
+                raise ValueError(f"Delete called on invalid file: {self.__str__()}")
         except FileNotFoundError:
-            self._exists = 0
+            self.exists = False
+            self.is_readable = False
+            self.is_writable = None
         except IOError:
-            self._exists = None
+            # unclear what happend
+            self.exists = None
+            self.is_readable = None
+            self.is_writable = None
         return
 
     def get_fofn_entry(self, path_info=PathComponent.filename) -> str:
