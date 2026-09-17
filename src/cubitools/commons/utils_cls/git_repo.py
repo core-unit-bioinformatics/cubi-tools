@@ -15,13 +15,17 @@ class GitRepository:
         if isinstance(repo_uri, str):
             # this is the 'clone' operation, which means
             # repo_uri is the remote URL
-            _, _, repo_name = self._parse_git_remote_url(repo_uri)
+            server, _, namespaces, repo_name = self._parse_git_remote_url(repo_uri)
             self.local_path = pl.Path.cwd().joinpath(repo_name)
             self.repo_name = repo_name
+            # namespace = just exist on GitLab,
+            # see _parse_git_remote_url
+            self.server_namespaces = {server: namespaces}
             self.remote_source = repo_uri
         elif isinstance(repo_uri, pl.Path):
             self.local_path = repo_uri
             self.repo_name = self.local_path.name
+            self.server_namespaces = None
             self.remote_source = None
         else:
             raise TypeError(f"Unexpected type for local_repo_path: {type(repo_uri)} / {repo_uri}")
@@ -48,7 +52,16 @@ class GitRepository:
         self.git_preset = git_preset
         self.user_name = git_preset.local_user.name
         self.user_email = git_preset.local_user.email
-        self.active_remotes = None
+        if self.is_git_repo:
+            try:
+                self.active_remotes, self.server_namespaces = self._parse_remotes()
+            except Exception:
+                # this should be more specific - subprocess.CalledProcessError
+                self.active_remotes = None
+                self.server_namespaces = None
+        else:
+            self.active_remotes = None
+            self.server_namespaces = None
         return None
 
     def _parse_git_remote_url(self, remote_url):
@@ -67,7 +80,8 @@ class GitRepository:
             # assume https url
             auth_type = GitAuth.https
             parsed = urlp.urlparse(remote_url)
-            assert parsed.scheme == GitAuth.https.name, f"Unexpected URL scheme in git remote URL: {remote_url}"
+            if parsed.scheme != GitAuth.https.name:
+                raise ValueError(f"Unexpected URL scheme in git remote URL: {remote_url}")
 
         server = parsed.hostname
         handle = parsed.path.strip("/").split("/")[0]
@@ -75,13 +89,20 @@ class GitRepository:
             raise ValueError(f"Remote URL is not a git repo: {remote_url}")
         repo_name = parsed.path.split("/")[-1].rsplit(".", 1)[0]
 
+        # this is a fix just for GitLab, which supports 'groups' or
+        # simply 'namespaces' to further group repositories. A repo URL
+        # from GitLab can thus contain an arbitrary number of path
+        # components that we need to keep here in order to form
+        # a valid URL later.
+        namespaces = parsed.path.strip("/").split("/")[1:-1]
+
         if auth_type == GitAuth.https:
             if self.logger is not None:
                 self.logger.warning(
                     f"Remote URL uses HTTPS authentication, which is discouraged for development work: {remote_url}"
                 )
 
-        return server, handle, repo_name
+        return server, handle, namespaces, repo_name
 
     def _build_git_remote_url(self, remote, account):
         """_build_git_remote_url _summary_
@@ -92,7 +113,12 @@ class GitRepository:
         """
         srv = remote.server
         hdl = account.handle
-        remote_url = f"git@{srv}:{hdl}/{self.repo_name}.git"
+        if self.server_namespaces is not None and srv in self.server_namespaces:
+            namespaces = self.server_namespaces[srv]
+            namespaces = "/".join(namespaces)
+            remote_url = f"git@{srv}:{hdl}/{namespaces}/{self.repo_name}.git"
+        else:
+            remote_url = f"git@{srv}:{hdl}/{self.repo_name}.git"
         return remote_url
 
     def _set_user_config(self):
@@ -125,14 +151,26 @@ class GitRepository:
         # this only reads, hence 'force_exec'
         out, _ = self.git_exec.run(["remote", "-v"], force_exec=True)
         active_remotes = dict()
+        server_namespaces = dict()
         for line in out.split("\n"):
             if not line.strip():
                 continue
             content = [char for char in line.strip().split() if char != ""]
             assert len(content) == 3, content
-            remote_name, remote_url, remote_op = content
+            remote_name, remote_url, _ = content
+            try:
+                server, _, namespaces, _ = self._parse_git_remote_url(remote_url)
+                server_namespaces[server] = namespaces
+            except ValueError:
+                # hard call here but during object creation, the remotes
+                # may be unset if we are initiliazing a new repo.
+                # Hence, be silent about this if not logger configured.
+                if self.logger is not None:
+                    self.logger.warning(
+                        f"Parsing error for remote URL: {remote_url} --- ignoring..."
+                    )
             active_remotes[remote_name] = remote_url
-        return active_remotes
+        return active_remotes, server_namespaces
 
     def _set_remotes(self):
         """_set_remotes
@@ -248,7 +286,7 @@ class GitRepository:
         self._set_remotes()
         if not self.git_exec.dry_run:
             self.is_git_repo = True
-            self.active_remotes = self._parse_remotes()
+            self.active_remotes, self.server_namespaces = self._parse_remotes()
 
         if self.logger is not None:
             self.logger.debug(f"Initializing new repo - done")
@@ -266,9 +304,9 @@ class GitRepository:
                 self.logger.error(err_msg)
             raise RuntimeError(err_msg)
         self._set_user_config()
-        self.active_remotes = self._parse_remotes()
+        self.active_remotes, self.server_namespaces = self._parse_remotes()
         self._set_remotes()
-        self.active_remotes = self._parse_remotes()
+        self.active_remotes, self.server_namespaces = self._parse_remotes()
         if self.logger is not None:
             self.logger.debug("Normalizing existing repo - done")
         return None
