@@ -116,6 +116,7 @@ class GitRepository:
         if self.server_namespaces is not None and srv in self.server_namespaces:
             namespaces = self.server_namespaces[srv]
             namespaces = "/".join(namespaces)
+            assert len(namespaces) > 0, f"{self.server_namespaces}"
             remote_url = f"git@{srv}:{hdl}/{namespaces}/{self.repo_name}.git"
         else:
             remote_url = f"git@{srv}:{hdl}/{self.repo_name}.git"
@@ -160,7 +161,8 @@ class GitRepository:
             remote_name, remote_url, _ = content
             try:
                 server, _, namespaces, _ = self._parse_git_remote_url(remote_url)
-                server_namespaces[server] = namespaces
+                if namespaces:
+                    server_namespaces[server] = namespaces
             except ValueError:
                 # hard call here but during object creation, the remotes
                 # may be unset if we are initiliazing a new repo.
