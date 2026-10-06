@@ -24,16 +24,38 @@ else:
 
 @dcl.dataclass(frozen=True)
 class CubiToolsEnv:
+    """This partially implements the concepts
+    befind the XDG Base Directory Specification:
+    https://specifications.freedesktop.org/basedir/latest/
+    See the comments below for details.
+    """
     path: str
     user_home: pl.Path
     user_name: str
     host_name: str
+    # From the specs:
+    # $XDG_CACHE_HOME defines the base directory relative to which user-specific
+    # non-essential data files should be stored.
+    # The cache folder will be used, e.g., as default checkout/clone
+    # location for template repositories.
     cache_dir: pl.Path
+    # From the specs:
+    # $XDG_STATE_HOME defines the base directory relative to which user-specific
+    # state files should be stored.
+    # The 'state' of the program is reflected by the environment config
+    # file and the current log files.
     state_dir: pl.Path
+    # From the specs:
+    # $XDG_CONFIG_HOME defines the base directory relative to which user-specific
+    # configuration files should be stored.
+    # This is the place to store the user config that can be changed
+    # outside of the runtime context by the user.
     config_dir: pl.Path
+    # the following two files live in the 'state' dir
     env_file: pl.Path
-    cfg_file: pl.Path
     log_file: pl.Path
+    # the config file lives in the 'config' dir
+    cfg_file: pl.Path
 
 
 class CubiToolsEnvBuilder:
