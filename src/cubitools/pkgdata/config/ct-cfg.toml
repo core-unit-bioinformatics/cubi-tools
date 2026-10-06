@@ -1,0 +1,67 @@
+
+[git]
+
+[[git.preset]]
+name = "qb-github"
+remotes = ["github"]
+remote_handles = ["core-unit-bioinformatics"]
+local_user = "UNSET"
+
+[[git.preset]]
+name = "qb-githhu"
+remotes = ["githhu"]
+remote_handles = ["cubi"]
+local_user = "UNSET"
+
+[[git.preset]]
+name = "qb-all"
+remotes = ["github", "githhu"]
+remote_handles = ["core-unit-bioinformatics", "cubi"]
+local_user = "UNSET"
+
+[[git.remote]]
+server = "github.com"
+name = "github"
+priority = 1
+
+[[git.remote]]
+server = "git.hhu.de"
+name = "githhu"
+priority = 0
+
+[[git.account]]
+category = "user"
+handle = "UNSET"
+name = "UNSET"
+email = "UNSET"
+remotes = ["githhu"]
+
+[[git.account]]
+category = "user"
+handle = "UNSET"
+name = "UNSET"
+email = "UNSET"
+remotes = ["github"]
+
+[[git.account]]
+category = "org"
+handle = "cubi"
+remotes = ["githhu"]
+
+[[git.account]]
+category = "org"
+handle = "core-unit-bioinformatics"
+remotes = ["github"]
+
+[templates]
+
+[[templates.workflow]]
+name = "snakemake"
+repo = "template-snakemake"
+remote = "github"
+remote_user = "core-unit-bioinformatics"
+
+[templates.metadata]
+repo = "template-metadata-files"
+remote = "github"
+remote_user = "core-unit-bioinformatics"
