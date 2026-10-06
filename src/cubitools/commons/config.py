@@ -1,9 +1,11 @@
 
 import logging
+import shutil
 
 import toml
 
-from cubitools import __debug_run__
+import cubitools.commons.utils_func.payloads as ctpl
+from cubitools import __debug_run__, __version__, __package__
 from cubitools.commons.constants import __STRUCT_INIT_LOG_HANDLER
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 
@@ -42,13 +44,27 @@ class CubiToolsConfig:
             warn = (
                 "No CUBI-Tools config file detected "
                 f"at location: {self.config_file}. "
-                "Starting with empty config."
+                "Attempting to deploy default config..."
             )
             self.logger.warning(warn)
-            return dict()
+            default_config_path = ctpl.get_payload_config_path()
+            try:
+                self.config_file.parent.mkdir(exist_ok=True, parents=True)
+                shutil.copy(default_config_path, self.config_file)
+            except (IOError,OSError) as exc:
+                err_msg = (
+                    f"Could not copy default config to location: {self.config_file} - "
+                    f"Error message: {str(exc)} - "
+                    "Ignoring and proceeding with empty config."
+                )
+                self.logger.warning(err_msg)
+                return dict()
+            else:
+                self.logger.debug("Default config deployed successfully")
 
         with open(self.config_file, "r") as dump:
             cfg = toml.load(dump)
+        cfg[__package__] = {"version": f"v{__version__}"}
         self.logger.debug("Config file loaded")
         return cfg
 
