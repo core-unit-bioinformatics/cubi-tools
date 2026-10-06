@@ -5,10 +5,11 @@ import pathlib as pl
 import sys
 
 __py_version__ = sys.version_info
+__package__ = "cubitools"
 
 try:
-    __version__ = impmd.version("cubitools")
-    __pkg_metadata__ = impmd.metadata("cubitools")
+    __version__ = impmd.version(__package__)
+    __pkg_metadata__ = impmd.metadata(__package__)
     __license__ = __pkg_metadata__["License-Expression"]
     __prog__ = pl.Path(sys.argv[0]).name
     __usage__ = f"{__prog__} [general parameters] [subcommand] [subcommand parameters] --- "
