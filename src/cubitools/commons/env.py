@@ -25,7 +25,7 @@ else:
 @dcl.dataclass(frozen=True)
 class CubiToolsEnv:
     """This partially implements the concepts
-    befind the XDG Base Directory Specification:
+    behind the XDG Base Directory Specification:
     https://specifications.freedesktop.org/basedir/latest/
     See the comments below for details.
     """
