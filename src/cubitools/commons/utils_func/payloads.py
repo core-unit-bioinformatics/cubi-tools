@@ -11,6 +11,6 @@ def get_payload_config_path():
     """
     payload_files = imprs.files(__package__)
     default_config = payload_files.joinpath(
-        "config", CT_CONST.cfg_file_name
+        "pkgdata", "config", CT_CONST.cfg_file_name
     ).resolve(strict=True)
     return default_config
