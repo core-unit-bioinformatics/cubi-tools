@@ -81,9 +81,13 @@ def _build_git_accounts(git_accounts_spec, git_remotes):
             acc_struct = GitConfigAccountOrg(**acc_struct)
         else:
             raise ValueError
-        assert acc_struct.handle not in git_accounts, \
-            f"Duplicate git handle: {acc_struct.handle}"
-        git_accounts[acc_struct.handle] = acc_struct
+        if acc_struct.handle in git_accounts:
+            # this silently sweeps over the issue in the user
+            # config that the same user handle is used for
+            # several remotes which are configured individually
+            git_accounts[acc_struct.handle].add_remotes(acc_struct.remotes)
+        else:
+            git_accounts[acc_struct.handle] = acc_struct
 
     return git_accounts
 

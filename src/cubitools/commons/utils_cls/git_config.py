@@ -47,7 +47,7 @@ class GitConfigPreset:
 class GitConfigRemote:
     name: str
     server: str
-    priority: int = 0 | 1
+    priority: typ.Literal[0, 1] = 1
 
     def __post_init__(self):
         if self.priority not in [0,1]:
@@ -61,8 +61,13 @@ class GitConfigRemote:
 @dcl.dataclass(frozen=True)
 class GitConfigAccountOrg:
     handle: str
-    remotes: list[str]
+    remotes: list[GitConfigRemote]
     category: typ.Literal["org"] = "org"
+
+    def add_remotes(self, remotes: list[GitConfigRemote]) -> None:
+        assert all([isinstance(remote, GitConfigRemote) for remote in remotes])
+        self.remotes.extend(remotes)
+        return
 
 
 @dcl.dataclass(frozen=True)
@@ -70,6 +75,10 @@ class GitConfigAccountUser:
     handle: str
     name: str
     email: str
-    remotes: list[str]
+    remotes: list[GitConfigRemote]
     category: typ.Literal["user"] = "user"
 
+    def add_remotes(self, remotes: list[GitConfigRemote]) -> None:
+        assert all([isinstance(remote, GitConfigRemote) for remote in remotes])
+        self.remotes.extend(remotes)
+        return
