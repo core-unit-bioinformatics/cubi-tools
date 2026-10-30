@@ -2,7 +2,7 @@
 import logging
 import shutil
 
-import toml
+import tomlkit
 
 import cubitools.commons.utils_func.payloads as ctpl
 from cubitools import __debug_run__, __version__, __package__
@@ -63,7 +63,7 @@ class CubiToolsConfig:
                 self.logger.debug("Default config deployed successfully")
 
         with open(self.config_file, "r") as dump:
-            cfg = toml.load(dump)
+            cfg = tomlkit.load(dump)
         cfg[__package__] = {"version": f"v{__version__}"}
         self.logger.debug("Config file loaded")
         return cfg

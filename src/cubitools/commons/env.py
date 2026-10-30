@@ -5,7 +5,7 @@ import os
 import pathlib as pl
 import socket
 
-import toml
+import tomlkit
 
 from cubitools import __debug_run__
 from cubitools.commons.constants import CUBITOOLS_CONSTANTS as CT_CONST
@@ -116,7 +116,7 @@ class CubiToolsEnvBuilder:
         else:
             _file_enc = CT_CONST.default_text_encoding
             with open(custom_env, "r", encoding=_file_enc) as cfg_dump:
-                plain_values = toml.load(cfg_dump)
+                plain_values = tomlkit.load(cfg_dump)
             loaded_env = dict()
             for key, value in plain_values.items():
                 if key.endswith("_dir") or key in ["user_home"]:
@@ -134,7 +134,7 @@ class CubiToolsEnvBuilder:
         )
         _file_enc = CT_CONST.default_text_encoding
         with open(ct_env.env_file, "w", encoding=_file_enc) as env_dump:
-            toml.dump(simple_env, env_dump)
+            tomlkit.dump(simple_env, env_dump)
         return
 
     def _collect_user_info(self, ct_env):
