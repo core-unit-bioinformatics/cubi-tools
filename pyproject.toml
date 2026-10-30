@@ -12,15 +12,16 @@ maintainers = [
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
-    "toml (>=0.10,<0.11)",
+    "toml (>=0.10,<0.11)",  # deprecated: only needed by ct-upd-md/ct-upd-wf until they use tomlkit
+    "tomlkit (>=0.15,<0.16)",
     "semver (>=3.0,<4.0)"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: CUBI",
-  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
   "Private :: Do Not Upload"
 ]
 
@@ -69,7 +70,7 @@ disable = [ "logging-fstring-interpolation", "useless-return", "missing-module-d
 [tool.ruff]
 line-length = 88
 indent-width = 4
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.format]
 line-ending = "lf"

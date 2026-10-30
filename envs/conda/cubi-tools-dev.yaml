@@ -1,11 +1,12 @@
 name: cubi-tools-dev
 dependencies:
-  - Python=3.11.*
-  - pip=25.1.*
+  - Python=3.13.*
+  - pip=26.*
   - setuptools=75.*
   - setuptools-scm=8.*
   - toml=0.10.*
-  - semver=3.0.*
+  - tomlkit=0.15.*
+  - semver=3.*
   - pylint=3.3.*
   - isort=6.0.*
   - black=24.10.*

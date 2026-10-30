@@ -1,5 +1,5 @@
 BootStrap: docker
-From: python:3.11-slim
+From: python:3.13-slim
 
 %labels
     Author "Core Unit Bioinformatics"

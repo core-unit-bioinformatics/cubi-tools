@@ -1,6 +1,7 @@
 name: cubi-tools
 dependencies:
-  - Python=3.11.*
-  - pip=25.1.*
+  - Python=3.13.*
+  - pip=26.*
   - toml=0.10.*
-  - semver=3.0.*
+  - tomlkit=0.15.*
+  - semver=3.*

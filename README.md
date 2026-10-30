@@ -2,8 +2,9 @@
 
 This repository is a collection of helper tools and useful scipts for internal and
 external use. The CUBI Tools are implemented with minimal dependencies outside of the
-Python standard library (Python v3.11). Currently, the only non-standard packages are
-`toml` and `semver`, which must be available to execute any CUBI tool.
+Python standard library (Python v3.13). Currently, the only non-standard packages are
+`toml` (transitional/deprecated), `tomlkit` and `semver`, which must be available
+to execute any CUBI tool.
 
 # Installation
 
