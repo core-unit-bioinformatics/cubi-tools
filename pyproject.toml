@@ -82,6 +82,17 @@ select = ["E", "F", "B", "I"]
 ignore = []
 unfixable = ["B"]
 
+[tool.mypy]
+python_version = "3.13"
+files = ["src/cubitools"]
+mypy_path = "src"
+# scripts not (yet) maintained as part of the package
+exclude = [
+    '^src/cubitools/cli/cluster_info\.py$',
+    '^src/cubitools/cli/update_metadata\.py$',
+    '^src/cubitools/cli/update_workflow\.py$',
+]
+
 # below: deprecated, use Ruff;
 # kept for compatibility
 [tool.black]
