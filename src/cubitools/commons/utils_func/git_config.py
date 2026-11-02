@@ -7,6 +7,8 @@ in the CubiToolsConfig object to simply dumping
 the current config to a single config file.
 """
 
+import typing as typ
+
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
 from cubitools.commons.utils_cls.git_config import (
     GitConfigAccountOrg,
@@ -28,21 +30,21 @@ def build_git_config() -> None:
     try:
         git_remotes_spec = plain_config["git"]["remote"]
         git_remotes = _build_git_remotes(git_remotes_spec)
-    except KeyError:
+    except KeyError as err:
         # TODO - query user
-        raise NotImplementedError("user query missing")
+        raise NotImplementedError("user query missing") from err
     try:
         git_accounts_spec = plain_config["git"]["account"]
         git_accounts = _build_git_accounts(git_accounts_spec, git_remotes)
-    except KeyError:
+    except KeyError as err:
         # TODO - query user
-        raise NotImplementedError("user query missing")
+        raise NotImplementedError("user query missing") from err
     try:
         git_presets_spec = plain_config["git"]["preset"]
         git_presets = _build_git_presets(git_presets_spec, git_remotes, git_accounts)
-    except KeyError:
+    except KeyError as err:
         # TODO - query user
-        raise NotImplementedError("user query missing")
+        raise NotImplementedError("user query missing") from err
 
     CT_CONFIG.set_git_config(git_remotes, git_accounts, git_presets)
     return None
@@ -70,20 +72,21 @@ def _build_git_accounts(
     """
     git_accounts: dict[str, GitConfigAccountUser | GitConfigAccountOrg] = dict()
     for account in git_accounts_spec:
-        set_remotes = []
+        set_remotes: list[GitConfigRemote] = []
         for remote in account["remotes"]:
             try:
                 git_remote = git_remotes[remote]
-            except KeyError:
+            except KeyError as err:
                 # TODO - query user
-                raise KeyError
+                raise NotImplementedError("user query missing") from err
             set_remotes.append(git_remote)
-        acc_struct = dict(account)
-        acc_struct["remotes"] = set_remotes
+        acc_values: dict[str, typ.Any] = dict(account)
+        acc_values["remotes"] = set_remotes
+        acc_struct: GitConfigAccountUser | GitConfigAccountOrg
         if account["category"] == "user":
-            acc_struct = GitConfigAccountUser(**acc_struct)
+            acc_struct = GitConfigAccountUser(**acc_values)
         elif account["category"] == "org":
-            acc_struct = GitConfigAccountOrg(**acc_struct)
+            acc_struct = GitConfigAccountOrg(**acc_values)
         else:
             raise ValueError
         if acc_struct.handle in git_accounts:
