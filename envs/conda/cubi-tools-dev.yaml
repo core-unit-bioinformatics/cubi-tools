@@ -8,6 +8,5 @@ dependencies:
   - tomlkit=0.15.*
   - semver=3.*
   - pylint=3.3.*
-  - isort=6.0.*
-  - black=24.10.*
   - ruff=0.12.*
+  - mypy=2.4.*
