@@ -3,12 +3,16 @@ import pathlib as pl
 import urllib.parse as urlp
 
 from cubitools.commons.enums import GitAuth
+from cubitools.commons.utils_cls.logging import MOCK_LOGGER, CubiToolsLogger, MockLogger
 from cubitools.commons.utils_cls.syscall import SysCallInterface
 
 
 class GitRepository:
 
-    def __init__(self, repo_uri: pl.Path|str, git_preset, dry_run: bool, logger=None):
+    def __init__(
+        self, repo_uri: pl.Path|str, git_preset, dry_run: bool,
+        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER
+    ):
 
         self.logger = logger
 
@@ -46,8 +50,7 @@ class GitRepository:
                 f"Git version {self.git_exec.exec_version} is too old for "
                 "cubitools - please upgrade to git v2.24 or higher"
             )
-            if self.logger is not None:
-                self.logger.error(err_msg)
+            self.logger.error(err_msg)
             raise RuntimeError(err_msg)
         self.git_preset = git_preset
         self.user_name = git_preset.local_user.name
@@ -97,10 +100,9 @@ class GitRepository:
         namespaces = parsed.path.strip("/").split("/")[1:-1]
 
         if auth_type == GitAuth.https:
-            if self.logger is not None:
-                self.logger.warning(
-                    f"Remote URL uses HTTPS authentication, which is discouraged for development work: {remote_url}"
-                )
+            self.logger.warning(
+                f"Remote URL uses HTTPS authentication, which is discouraged for development work: {remote_url}"
+            )
 
         return server, handle, namespaces, repo_name
 
@@ -125,14 +127,12 @@ class GitRepository:
     def _set_user_config(self):
         """_set_user_config _summary_
         """
-        if self.logger is not None:
-            self.logger.debug(f"Setting git user config: {self.local_path}")
+        self.logger.debug(f"Setting git user config: {self.local_path}")
         self.git_exec.run(['config', 'user.name', f'"{self.user_name}"'])
         self.git_exec.run(['config', 'user.email', f'"{self.user_email}"'])
         if not self.git_exec.dry_run:
             assert self.local_path.joinpath(".git").is_dir()
-        if self.logger is not None:
-            self.logger.debug(f"Setting git user config - done")
+        self.logger.debug(f"Setting git user config - done")
         return None
 
     def _remove_remote(self, remote_name):
@@ -141,8 +141,7 @@ class GitRepository:
         Args:
             remote_name (_type_): _description_
         """
-        if self.logger is not None:
-            self.logger.debug(f"Removing remote '{remote_name}' from repo {self.repo_name}")
+        self.logger.debug(f"Removing remote '{remote_name}' from repo {self.repo_name}")
         self.git_exec.run(["remote", "remove", remote_name])
         return None
 
@@ -166,19 +165,18 @@ class GitRepository:
             except ValueError:
                 # hard call here but during object creation, the remotes
                 # may be unset if we are initiliazing a new repo.
-                # Hence, be silent about this if not logger configured.
-                if self.logger is not None:
-                    self.logger.warning(
-                        f"Parsing error for remote URL: {remote_url} --- ignoring..."
-                    )
+                # Hence, be silent about this if no logger is configured
+                # (the default MockLogger discards the warning).
+                self.logger.warning(
+                    f"Parsing error for remote URL: {remote_url} --- ignoring..."
+                )
             active_remotes[remote_name] = remote_url
         return active_remotes, server_namespaces
 
     def _set_remotes(self):
         """_set_remotes
         """
-        if self.logger is not None:
-            self.logger.debug(f"Setting remotes for repo: {self.local_path}")
+        self.logger.debug(f"Setting remotes for repo: {self.local_path}")
 
         remotes = self.git_preset.remotes
         remote_accounts = self.git_preset.remote_handles
@@ -192,18 +190,16 @@ class GitRepository:
                     # see if we can skip
                     active_remote_url = self.active_remotes[remote.name]
                     if active_remote_url == remote_url:
-                        if self.logger is not None:
-                            self.logger.debug(
-                                f"Remote '{remote.name}' already set for repo: {self.repo_name}"
-                            )
+                        self.logger.debug(
+                            f"Remote '{remote.name}' already set for repo: {self.repo_name}"
+                        )
                         set_remotes[remote.name] = remote_url
                         # fix: add to priority remote if applicable
                         if remote.priority > 0:
-                            if self.logger is not None:
-                                self.logger.debug(
-                                    f"Remote '{remote.name}' is high priority for repo {self.repo_name} "
-                                    "- adding to list of candidates for 'all' remote"
-                                )
+                            self.logger.debug(
+                                f"Remote '{remote.name}' is high priority for repo {self.repo_name} "
+                                "- adding to list of candidates for 'all' remote"
+                            )
                             high_prio_remote.append(remote)
                             high_prio_remote.append(remote_url)
                         continue
@@ -236,8 +232,7 @@ class GitRepository:
                     "high priority remote is configured for git preset "
                     f"{self.git_preset.name}: {high_prio_remote}"
                 )
-                if self.logger is not None:
-                    self.logger.error(err_msg)
+                self.logger.error(err_msg)
                 raise RuntimeError(err_msg)
             # set virtual all remote, targeting primary remote
             # note that a repeated call to git_repo.norm() will first
@@ -254,13 +249,11 @@ class GitRepository:
             account (_type_): _description_
             remote_url (_type_): _description_
         """
-        if self.logger is not None:
-            self.logger.debug(f"Setting 'all' target to primary remote: {prio_remote.name}")
+        self.logger.debug(f"Setting 'all' target to primary remote: {prio_remote.name}")
         self.git_exec.run(["remote", "add", "all", prio_remote_url])
 
         for remote_name, remote_url in remote_urls.items():
-            if self.logger is not None:
-                self.logger.debug(f"Adding remote push target for 'all': {remote_name} / {remote_url}")
+            self.logger.debug(f"Adding remote push target for 'all': {remote_name} / {remote_url}")
             self.git_exec.run(["remote", "set-url", "--add", "--push", "all", remote_url])
 
         # this is safe to set here
@@ -270,8 +263,7 @@ class GitRepository:
     def init_repo(self):
         """init_repo
         """
-        if self.logger is not None:
-            self.logger.debug(f"Initializing new repo: {self.local_path}")
+        self.logger.debug(f"Initializing new repo: {self.local_path}")
         try:
             if not self.git_exec.dry_run:
                 self.local_path.mkdir(exist_ok=False, parents=True)
@@ -290,8 +282,7 @@ class GitRepository:
             self.is_git_repo = True
             self.active_remotes, self.server_namespaces = self._parse_remotes()
 
-        if self.logger is not None:
-            self.logger.debug(f"Initializing new repo - done")
+        self.logger.debug(f"Initializing new repo - done")
         return None
 
     def norm_repo(self):
@@ -302,15 +293,13 @@ class GitRepository:
                 "Cannot normalize git information in path because it is not a "
                 f"git repository: {self.local_path}"
             )
-            if self.logger is not None:
-                self.logger.error(err_msg)
+            self.logger.error(err_msg)
             raise RuntimeError(err_msg)
         self._set_user_config()
         self.active_remotes, self.server_namespaces = self._parse_remotes()
         self._set_remotes()
         self.active_remotes, self.server_namespaces = self._parse_remotes()
-        if self.logger is not None:
-            self.logger.debug("Normalizing existing repo - done")
+        self.logger.debug("Normalizing existing repo - done")
         return None
 
     def set_user(self):
@@ -321,26 +310,22 @@ class GitRepository:
                 "Cannot normalize git information in path because it is not a "
                 f"git repository: {self.local_path}"
             )
-            if self.logger is not None:
-                self.logger.error(err_msg)
+            self.logger.error(err_msg)
             raise RuntimeError(err_msg)
         self._set_user_config()
-        if self.logger is not None:
-            self.logger.debug("Setting user config for existing repo - done")
+        self.logger.debug("Setting user config for existing repo - done")
         return None
 
     def clone_repo(self):
         """clone_repo _summary_
         """
-        if self.logger is not None:
-            self.logger.debug(f"Cloning new repo into: {self.local_path}")
+        self.logger.debug(f"Cloning new repo into: {self.local_path}")
         if self.is_git_repo:
             err_msg = (
                 "Cannot clone git repository because path already exists and is a "
                 f"git repository: {self.local_path}"
             )
-            if self.logger is not None:
-                self.logger.error(err_msg)
+            self.logger.error(err_msg)
             raise RuntimeError(err_msg)
         assert self.remote_source is not None, "Remote source URL must be set to clone repository"
         self.git_exec.run(["clone", self.remote_source, str(self.local_path)])
@@ -352,6 +337,5 @@ class GitRepository:
             self.is_git_repo = True
             self.norm_repo()
 
-        if self.logger is not None:
-            self.logger.debug(f"Cloning of repo - done")
+        self.logger.debug(f"Cloning of repo - done")
         return None
