@@ -67,6 +67,10 @@ class FileCollector:
                             self._follow_symlink_dirs = True
                         else:
                             self._follow_symlink_dirs = False
+                    # symlinks are handled by the above settings and
+                    # not by a matching function, i.e. there is
+                    # nothing to append to the matching functions
+                    continue
                 else:
                     # check for: fixed string match in fp
                     matcher = self._get_match_generic(glob_pattern)
