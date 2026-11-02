@@ -75,30 +75,36 @@ class CubiToolsEnvBuilder:
             loaded_env["path"] = os_env["PATH"]
             ct_env = CubiToolsEnv(**loaded_env)
         else:
-            ct_env = dict()
-            ct_env["path"] = os_env["PATH"]
-            self._collect_user_info(ct_env)
+            env_values: dict[str, typ.Any] = dict()
+            env_values["path"] = os_env["PATH"]
+            self._collect_user_info(env_values)
 
             fmt = {"USERHOME": self.user_home}
-            ct_env["config_dir"] = self._set_env_dir(
+            env_values["config_dir"] = self._set_env_dir(
                 os_env,
                 CT_CONST.xdg_config_home,
                 CT_CONST.config_default.format(**fmt),
             )
-            ct_env["state_dir"] = self._set_env_dir(
+            env_values["state_dir"] = self._set_env_dir(
                 os_env,
                 CT_CONST.xdg_state_home,
                 CT_CONST.state_default.format(**fmt),
             )
-            ct_env["cache_dir"] = self._set_env_dir(
+            env_values["cache_dir"] = self._set_env_dir(
                 os_env,
                 CT_CONST.xdg_cache_home,
                 CT_CONST.cache_default.format(**fmt),
             )
-            ct_env["env_file"] = ct_env["state_dir"].joinpath(CT_CONST.env_file_name)
-            ct_env["cfg_file"] = ct_env["config_dir"].joinpath(CT_CONST.cfg_file_name)
-            ct_env["log_file"] = ct_env["state_dir"].joinpath(CT_CONST.log_file_name)
-            ct_env = CubiToolsEnv(**ct_env)
+            env_values["env_file"] = env_values["state_dir"].joinpath(
+                CT_CONST.env_file_name
+            )
+            env_values["cfg_file"] = env_values["config_dir"].joinpath(
+                CT_CONST.cfg_file_name
+            )
+            env_values["log_file"] = env_values["state_dir"].joinpath(
+                CT_CONST.log_file_name
+            )
+            ct_env = CubiToolsEnv(**env_values)
         self._dump_env_file(ct_env)
         return ct_env
 
@@ -108,20 +114,19 @@ class CubiToolsEnvBuilder:
         try:
             custom_env = pl.Path(os_env[CT_CONST.cubi_tools_env]).resolve(strict=True)
         except (KeyError, FileNotFoundError):
-            custom_env = None
-            loaded_env: dict[str, typ.Any] = dict()
-        else:
-            _file_enc = CT_CONST.default_text_encoding
-            with open(custom_env, "r", encoding=_file_enc) as cfg_dump:
-                plain_values = tomlkit.load(cfg_dump)
-            loaded_env = dict()
-            for key, value in plain_values.items():
-                if key.endswith("_dir") or key in ["user_home"]:
-                    loaded_env[key] = pl.Path(value).resolve(strict=True)
-                elif key.endswith("_file"):
-                    loaded_env[key] = pl.Path(value).resolve()
-                else:
-                    loaded_env[key] = value
+            return None, dict()
+
+        _file_enc = CT_CONST.default_text_encoding
+        with open(custom_env, "r", encoding=_file_enc) as cfg_dump:
+            plain_values = tomlkit.load(cfg_dump)
+        loaded_env: dict[str, typ.Any] = dict()
+        for key, value in plain_values.items():
+            if key.endswith("_dir") or key in ["user_home"]:
+                loaded_env[key] = pl.Path(value).resolve(strict=True)
+            elif key.endswith("_file"):
+                loaded_env[key] = pl.Path(value).resolve()
+            else:
+                loaded_env[key] = value
         return custom_env, loaded_env
 
     def _dump_env_file(self, ct_env: CubiToolsEnv) -> None:
