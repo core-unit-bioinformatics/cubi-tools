@@ -190,8 +190,12 @@ class FileCollector:
         for _, dir_stats in self.walked_dirs.items():
             total_files += dir_stats.total_files
             total_size = dir_stats.total_size + total_size
-            min_size = min(min_size, dir_stats.min_size)
-            max_size = max(max_size, dir_stats.max_size)
+            # the below access to the attribute .size is to calm
+            # mypy even though FileSize is explicitly designed
+            # to handle comparisons with int, but min/max here may
+            # return either int or FileSize
+            min_size = min(min_size, dir_stats.min_size.size)
+            max_size = max(max_size, dir_stats.max_size.size)
         stats = FileSizeStats(
             total_files, FileSize(total_size), FileSize(min_size), FileSize(max_size)
         )
