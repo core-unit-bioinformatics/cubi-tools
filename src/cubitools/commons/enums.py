@@ -1,4 +1,3 @@
-
 import dataclasses
 import enum
 
@@ -63,11 +62,8 @@ class ChecksumLength:
 
     @classmethod
     def get_length_order(cls):
-        """get_length_order
-        """
-        ordered = sorted(
-            [(f.default, f.name) for f in dataclasses.fields(cls)]
-        )
+        """get_length_order"""
+        ordered = sorted([(f.default, f.name) for f in dataclasses.fields(cls)])
         return ordered
 
 

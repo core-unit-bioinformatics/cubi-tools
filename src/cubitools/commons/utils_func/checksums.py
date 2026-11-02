@@ -1,16 +1,14 @@
-
-from queue import Empty as QEmpty
 import multiprocessing as mp
 import time
 import typing as typ
+from queue import Empty as QEmpty
 
 from cubitools.commons.enums import Checksum
-from cubitools.commons.utils_cls.syscall import SysCallInterface
 from cubitools.commons.utils_cls.file import File
+from cubitools.commons.utils_cls.syscall import SysCallInterface
 
 
 def _checksum_worker(inq, outq):
-
     chk_sci = dict()
 
     while 1:
@@ -31,8 +29,7 @@ def _checksum_worker(inq, outq):
                 checksum, _ = checksum.split(maxsplit=1)
             except ValueError as verr:
                 err_msg = (
-                    f"Error computing checksum {checksum_type} "
-                    f"for file {file_path}"
+                    f"Error computing checksum {checksum_type} for file {file_path}"
                 )
                 verr.add_note(err_msg)
                 raise
@@ -63,10 +60,7 @@ def add_checksum_to_file(file: File, checksum: Checksum, logger):
         stdout, _ = sci.run([use_path])
         checksum_value, _ = stdout.strip().split(maxsplit=1)
     except ValueError as verr:
-        err_msg = (
-            f"Error computing checksum {checksum} "
-            f"for file {file.abs_path}"
-        )
+        err_msg = f"Error computing checksum {checksum} for file {file.abs_path}"
         verr.add_note(err_msg)
         raise
     attr_name = checksum.name.lower()
@@ -74,22 +68,22 @@ def add_checksum_to_file(file: File, checksum: Checksum, logger):
     return None
 
 
-def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list[Checksum], jobs: int, logger):
-
+def add_checksums_to_files(
+    files: list[File] | typ.Iterable[File], checksums: list[Checksum], jobs: int, logger
+):
     sync_man = mp.Manager()
     sendq = sync_man.Queue()
     recvq = sync_man.Queue()
 
     workers = [
-        mp.Process(target=_checksum_worker, args=(sendq, recvq))
-        for _ in range(jobs)
+        mp.Process(target=_checksum_worker, args=(sendq, recvq)) for _ in range(jobs)
     ]
     logger.debug(f"Initialized {jobs} worker processes")
     [p.start() for p in workers]
 
     file_buffer = []
     try:
-        num_files = len(files)  #type: ignore
+        num_files = len(files)  # type: ignore
     except TypeError:
         # This can happen if an iterator is passed
         # instead of a plain list. However, given that
@@ -191,6 +185,3 @@ def add_checksums_to_files(files: list[File]|typ.Iterable[File], checksums: list
             setattr(file, attr_name, file_checksums[(file.abs_path, checksum)])
 
     return None
-
-
-

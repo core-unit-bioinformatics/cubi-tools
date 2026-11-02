@@ -1,7 +1,6 @@
-
+import hashlib as hl
 import pathlib as pl
 import shutil as sh
-import hashlib as hl
 import subprocess as sp
 
 import semver
@@ -12,12 +11,13 @@ from cubitools.commons.utils_cls.logging import MOCK_LOGGER, CubiToolsLogger, Mo
 
 
 class SysCallInterface:
-
     def __init__(
-        self, working_dir=None, executable=None, dry_run=False,
-        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER
+        self,
+        working_dir=None,
+        executable=None,
+        dry_run=False,
+        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER,
     ):
-
         self._compute_object_id()
         self.logger = logger
         self.dry_run = dry_run
@@ -36,13 +36,11 @@ class SysCallInterface:
         return None
 
     def _compute_object_id(self) -> None:
-
         obj_id = str(id(self)).encode("utf-8")
         self._id = hl.sha1(obj_id).hexdigest()[:6].upper()
         return None
 
     def _set_exec_version(self) -> None:
-
         common_options = ["--version", "-v", "-ver", "version"]
 
         for version_option in common_options:
@@ -66,10 +64,9 @@ class SysCallInterface:
         return None
 
     def _present_dry_run_info(self, command: list[str]) -> None:
-
         cmd_str = " ".join(command)
         self.logger.tell_user(f"=== SysCallInterface {self._id} DRY RUN info ===")
-        #self.logger.tell_user(f"Current $PATH: {CT_ENV.path}")
+        # self.logger.tell_user(f"Current $PATH: {CT_ENV.path}")
         self.logger.tell_user(f"WD: {self.wd}")
         self.logger.tell_user(f"CMD: {cmd_str}")
         return None
@@ -98,8 +95,12 @@ class SysCallInterface:
         else:
             try:
                 exit_state = sp.run(
-                    command, check=True, shell=False, cwd=self.wd,
-                    capture_output=True, encoding=CT_CONST.default_text_encoding
+                    command,
+                    check=True,
+                    shell=False,
+                    cwd=self.wd,
+                    capture_output=True,
+                    encoding=CT_CONST.default_text_encoding,
                 )
             except sp.CalledProcessError as cperr:
                 msg = f"Command failed - exit {cperr.returncode}: {cperr.cmd}"
@@ -121,21 +122,17 @@ class SysCallInterface:
         return out, err
 
     def set_wd(self, working_dir: str | pl.Path) -> None:
-
         wd_path = pl.Path(working_dir).resolve(strict=(not self.dry_run))
         if wd_path.is_dir() or self.dry_run:
             # accept that wd_path may not exist
             pass
         else:
-            raise TypeError(
-                f"Working directory path is not a directory: {working_dir}"
-            )
+            raise TypeError(f"Working directory path is not a directory: {working_dir}")
         self.wd = wd_path
         self.logger.debug(f"SysCallInterface {self._id} wd changed to: {self.wd}")
         return None
 
     def set_exec(self, executable: str) -> None:
-
         if self.exec is not None:
             err_msg = (
                 f"Attempt to reset fixed executable for SysCallInterface {self._id} "
@@ -152,7 +149,6 @@ class SysCallInterface:
         self.exec = exec_path
         self._set_exec_version()
         self.logger.debug(
-            f"SysCallInterface {self._id} exec set to: {self.exec} "
-            f"v{self.exec_version}"
+            f"SysCallInterface {self._id} exec set to: {self.exec} v{self.exec_version}"
         )
         return None

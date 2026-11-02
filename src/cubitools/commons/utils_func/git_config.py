@@ -7,10 +7,13 @@ in the CubiToolsConfig object to simply dumping
 the current config to a single config file.
 """
 
-
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.utils_cls.git_config import GitConfigAccountOrg, \
-    GitConfigAccountUser, GitConfigPreset, GitConfigRemote
+from cubitools.commons.utils_cls.git_config import (
+    GitConfigAccountOrg,
+    GitConfigAccountUser,
+    GitConfigPreset,
+    GitConfigRemote,
+)
 
 
 def build_git_config():
@@ -46,12 +49,12 @@ def build_git_config():
 
 
 def _build_git_remotes(git_remotes_spec):
-    """build_git_remotes _summary_
-    """
+    """build_git_remotes _summary_"""
     git_remotes = dict()
     for remote in git_remotes_spec:
-        assert remote["name"] not in git_remotes, \
+        assert remote["name"] not in git_remotes, (
             f"Duplicate git remote name: {remote['name']}"
+        )
         remote_struct = GitConfigRemote(**remote)
         git_remotes[remote_struct.name] = remote_struct
     return git_remotes
@@ -131,7 +134,7 @@ def _build_git_presets(git_presets_spec, git_remotes, git_accounts):
                 "name": preset["name"],
                 "remotes": set_remotes,
                 "remote_handles": set_remote_handles,
-                "local_user": local_user
+                "local_user": local_user,
             }
         )
         git_presets[preset_struct.name] = preset_struct

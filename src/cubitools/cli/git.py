@@ -1,23 +1,20 @@
-
 import collections as col
 import pathlib as pl
 import subprocess as sp
 import sys
 
-from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
-from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.utils_cls.io_path import IOPath
 import cubitools.commons.utils_cls.logging as ctlog
 import cubitools.commons.utils_func.git_config as gitconfig
+from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
+from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.utils_cls.git_repo import GitRepository
-
+from cubitools.commons.utils_cls.io_path import IOPath
 
 LOGGER_NAME = __name__
 LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
 
 
 def get_subcommand_parser(subparsers):
-
     subcmd_name = "git"
     subcmd_desc = (
         "CUBI-Tools subcommand to initialize, clone or "
@@ -32,7 +29,8 @@ def get_subcommand_parser(subparsers):
     mutex = parser.add_mutually_exclusive_group(required=False)
 
     mutex.add_argument(
-        "--init", "-i",
+        "--init",
+        "-i",
         type=IOPath.output_dir,
         default=None,
         dest="init",
@@ -40,7 +38,7 @@ def get_subcommand_parser(subparsers):
             "Path to the new repository to initialize. "
             "Example: "
             "cubitools git --init PATH-TO-NEW-REPO [must not exist] --git-preset PRESET"
-        )
+        ),
     )
 
     mutex.add_argument(
@@ -53,18 +51,19 @@ def get_subcommand_parser(subparsers):
             "Normalize git remotes and user for existing repositories. "
             "Example: "
             "cubitools git --norm PATH-TO-EXISTING-REPO --git-preset PRESET"
-        )
+        ),
     )
 
     mutex.add_argument(
-        "--clone", "-c",
+        "--clone",
+        "-c",
         type=str,
         default=None,
         dest="clone",
         help=(
             "Full (remote) git path to clone in the form of: git@<remote>:<user-or-org>/<repo>.git "
             "Example: auto_git.py --clone git@github.com:core-unit-bioinformatics/cubi-tools.git"
-        )
+        ),
     )
 
     parser.add_argument(
@@ -78,7 +77,7 @@ def get_subcommand_parser(subparsers):
             "Git presets can be configured in the CUBI-Tools configuration "
             f"file: {CT_ENV.cfg_file}"
         ),
-        required=True
+        required=True,
     )
 
     parser.add_argument(
@@ -92,15 +91,16 @@ def get_subcommand_parser(subparsers):
             "(name and email) according to the preset but do not "
             "change the remotes. Is ignored for all other operations. "
             "Default: False"
-        )
+        ),
     )
 
     parser.add_argument(
-        "--no-usage-hints", "-noh",
+        "--no-usage-hints",
+        "-noh",
         action="store_true",
         default=False,
         dest="no_usage_hints",
-        help="If set, do not print usage hints to stdout at the end."
+        help="If set, do not print usage hints to stdout at the end.",
     )
 
     parser.set_defaults(exec=exec_git_module)
@@ -370,7 +370,6 @@ def init_git(args):
 
 
 def exec_git_module(args):
-
     LOGGER.set_debug_logging(args.debug)
     CT_CONFIG.set_logger(LOGGER)
 
@@ -380,28 +379,32 @@ def exec_git_module(args):
         repo = GitRepository(
             args.init,
             CT_CONFIG.git_presets[args.git_preset],  # type: ignore
-            args.dry_run, logger=LOGGER
+            args.dry_run,
+            logger=LOGGER,
         )
         repo.init_repo()
     elif args.norm is not None and args.only_user_cfg:
         repo = GitRepository(
             args.norm,
             CT_CONFIG.git_presets[args.git_preset],  # type: ignore
-            args.dry_run, logger=LOGGER
+            args.dry_run,
+            logger=LOGGER,
         )
         repo.set_user()
     elif args.norm is not None:
         repo = GitRepository(
             args.norm,
             CT_CONFIG.git_presets[args.git_preset],  # type: ignore
-            args.dry_run, logger=LOGGER
+            args.dry_run,
+            logger=LOGGER,
         )
         repo.norm_repo()
     elif args.clone is not None:
-        repo  = GitRepository(
+        repo = GitRepository(
             args.clone,
             CT_CONFIG.git_presets[args.git_preset],  # type: ignore
-            args.dry_run, logger=LOGGER
+            args.dry_run,
+            logger=LOGGER,
         )
         repo.clone_repo()
     else:

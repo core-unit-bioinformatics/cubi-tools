@@ -1,4 +1,3 @@
-
 import collections as col
 import math
 import re
@@ -7,15 +6,12 @@ import typing
 
 from cubitools.commons.enums import FileSizeUnit
 
-
 FileSizeStats = col.namedtuple(
-    "FileSizeStats",
-    field_names=["total_files", "total_size", "min_size", "max_size"]
+    "FileSizeStats", field_names=["total_files", "total_size", "min_size", "max_size"]
 )
 
 
 class FileSize:
-
     __slots__ = ["size", "b", "kb", "mb", "gb", "tb"]
 
     def __init__(self, file_size):
@@ -37,7 +33,9 @@ class FileSize:
         elif isinstance(file_size, FileSize):
             self.size = file_size.size
         else:
-            raise TypeError(f"Cannot process type of file size: {file_size} / {type(file_size)}")
+            raise TypeError(
+                f"Cannot process type of file size: {file_size} / {type(file_size)}"
+            )
         for i in range(len(FileSizeUnit)):
             fsu = FileSizeUnit(i)
             assert fsu.value == i
@@ -53,38 +51,38 @@ class FileSize:
 
     # in the following: adding 'object' just to silence
     # pylance: reportIncompatibleMethodOverride
-    def __eq__(self, other: 'object|int|float|FileSize') -> bool:
-        if isinstance(other, object|int|float):
+    def __eq__(self, other: "object|int|float|FileSize") -> bool:
+        if isinstance(other, object | int | float):
             return self.size == other
         else:
             return self.size == other.size
 
-    def __ne__(self, other: 'object|int|float|FileSize') -> bool:
-        if isinstance(other, object|int|float):
+    def __ne__(self, other: "object|int|float|FileSize") -> bool:
+        if isinstance(other, object | int | float):
             return self.size != other
         else:
             return self.size != other.size
 
-    def __lt__(self, other: 'int|float|FileSize') -> bool:
-        if isinstance(other, int|float):
+    def __lt__(self, other: "int|float|FileSize") -> bool:
+        if isinstance(other, int | float):
             return self.size < other
         else:
             return self.size < other.size
 
-    def __le__(self, other: 'int|float|FileSize') -> bool:
-        if isinstance(other, int|float):
+    def __le__(self, other: "int|float|FileSize") -> bool:
+        if isinstance(other, int | float):
             return self.size <= other
         else:
             return self.size <= other.size
 
-    def __gt__(self, other: 'int|float|FileSize') -> bool:
-        if isinstance(other, int|float):
+    def __gt__(self, other: "int|float|FileSize") -> bool:
+        if isinstance(other, int | float):
             return self.size > other
         else:
             return self.size > other.size
 
-    def __ge__(self, other: 'int|float|FileSize') -> bool:
-        if isinstance(other, int|float):
+    def __ge__(self, other: "int|float|FileSize") -> bool:
+        if isinstance(other, int | float):
             return self.size >= other
         else:
             return self.size >= other.size
@@ -98,17 +96,17 @@ class FileSize:
         pass
 
     @typing.overload
-    def __add__(self, other: 'FileSize') -> 'FileSize':
+    def __add__(self, other: "FileSize") -> "FileSize":
         pass
 
     def __add__(self, other):
-        if isinstance(other, int|float):
+        if isinstance(other, int | float):
             return self.size + other
         else:
             return FileSize(self.size + other.size)
 
     @typing.overload
-    def __mul__(self, other: int) -> 'FileSize':  #type: ignore
+    def __mul__(self, other: int) -> "FileSize":  # type: ignore
         # This is flagged as overlapping overloads with the float
         # version and seems to be caused by implicitly assuming
         # 'numerical' input instead of strictly enforcing a float;
@@ -122,7 +120,7 @@ class FileSize:
         pass
 
     @typing.overload
-    def __mul__(self, other: 'FileSize') -> 'FileSize':
+    def __mul__(self, other: "FileSize") -> "FileSize":
         pass
 
     def __mul__(self, other):
@@ -135,8 +133,8 @@ class FileSize:
         else:
             raise TypeError(type(other))
 
-    def __truediv__(self, other: 'int|float|FileSize') -> float:
-        if isinstance(other, int|float):
+    def __truediv__(self, other: "int|float|FileSize") -> float:
+        if isinstance(other, int | float):
             return self.size / other
         elif isinstance(other, FileSize):
             return self.size / other.size
@@ -163,7 +161,9 @@ class FileSize:
         file_size = file_size.lower()
         match_unit = re.search(unit_regexp, file_size)
         if match_unit is None:
-            raise ValueError(f"Cannot identify size unit in file size string: {file_size}")
+            raise ValueError(
+                f"Cannot identify size unit in file size string: {file_size}"
+            )
         unit_start, unit_end = match_unit.span()
         unit = file_size[unit_start:unit_end]
         number = float(file_size[:unit_start])

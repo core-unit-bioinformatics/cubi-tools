@@ -1,4 +1,3 @@
-
 import fnmatch as fnm
 import functools as fnt
 import os
@@ -6,14 +5,13 @@ import pathlib as pl
 import sys
 
 from cubitools.commons.enums import PathType
-
 from cubitools.commons.utils_cls.file import File
 from cubitools.commons.utils_cls.filesize import FileSize, FileSizeStats
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
 
-
 LOGGER_NAME = __name__
 LOGGER = CubiToolsLogger(LOGGER_NAME)
+
 
 class FileCollector:
     """The FileCollector class is responsible for collecting files from
@@ -26,8 +24,13 @@ class FileCollector:
     excluded) will be > SILENTLY < ignored / skipped over.
     """
 
-    def __init__(self, exclude_dir: list[str]|None, exclude_file: list[str]|None,
-                 include_dir: list[str]|None, include_file: list[str]) -> None:
+    def __init__(
+        self,
+        exclude_dir: list[str] | None,
+        exclude_file: list[str] | None,
+        include_dir: list[str] | None,
+        include_file: list[str],
+    ) -> None:
         self._follow_symlink_dirs = False
         self.walked_dirs = dict()
         self._last_dir = None
@@ -71,8 +74,8 @@ class FileCollector:
         return matching_functions
 
     def _get_match_default(self, include):
-
         if include:
+
             def include_all(path) -> bool:
                 """Default matcher for include check,
                 always True, i.e. include everything
@@ -84,8 +87,10 @@ class FileCollector:
                     bool: include/keep the path
                 """
                 return True
+
             return include_all
         else:
+
             def exclude_none(path) -> bool:
                 """Default matcher for exclude check,
                 always False, i.e. exclude nothing
@@ -97,24 +102,22 @@ class FileCollector:
                     bool: exclude/drop the path
                 """
                 return False
+
             return exclude_none
 
     def _get_match_hidden(self):
-
         def is_hidden(file_path) -> bool:
             return pl.Path(file_path).name.startswith(".")
 
         return is_hidden
 
     def _get_match_symlink(self):
-
         def is_symlink(file_path) -> bool:
             return pl.Path(file_path).is_symlink()
 
         return is_symlink
 
     def _get_match_generic(self, pattern: str):
-
         def glob_match(glob_pat: str, path) -> bool:
             return fnm.fnmatch(path, glob_pat)
 
@@ -151,7 +154,6 @@ class FileCollector:
         return None
 
     def keep_files(self, filenames: list[str]) -> list[str]:
-
         retain_files = []
         for filename in filenames:
             if any(check_exclude(filename) for check_exclude in self._exclude_file):
@@ -165,14 +167,12 @@ class FileCollector:
         return retain_files
 
     def get_last_stats(self):
-
         if self._last_dir is None:
             return None
         else:
             return self.walked_dirs[self._last_dir]
 
     def get_stats(self, root_dir=None) -> FileSizeStats:
-
         if root_dir is not None:
             return self.walked_dirs[root_dir]
 
@@ -186,8 +186,7 @@ class FileCollector:
             min_size = min(min_size, dir_stats.min_size)
             max_size = max(max_size, dir_stats.max_size)
         stats = FileSizeStats(
-            total_files, FileSize(total_size),
-            FileSize(min_size), FileSize(max_size)
+            total_files, FileSize(total_size), FileSize(min_size), FileSize(max_size)
         )
         return stats
 
@@ -206,7 +205,9 @@ class FileCollector:
         total_file_size = 0
         collected_files = []
         skipped_files = []
-        for toplevel, subdirs, filenames in os.walk(root_dir, topdown=True, followlinks=self._follow_symlink_dirs):
+        for toplevel, subdirs, filenames in os.walk(
+            root_dir, topdown=True, followlinks=self._follow_symlink_dirs
+        ):
             # NB: subdirs can be modified in-place to prune away parts of the
             # directory tree that we do not want; see
             # https://docs.python.org/3/library/os.html#os.walk
@@ -221,13 +222,13 @@ class FileCollector:
                 rel_path = abs_path.relative_to(root_dir)
                 fobj = File(abs_path=abs_path, rel_base=root_dir, rel_path=rel_path)
                 if not fobj.exists:
-                    skipped_files.append((fobj, 'DOES-NOT-EXIST'))
+                    skipped_files.append((fobj, "DOES-NOT-EXIST"))
                     continue
                 if root_dir != fobj.rel_base:
-                    skipped_files.append((fobj, 'OUT-OF-PATH'))
+                    skipped_files.append((fobj, "OUT-OF-PATH"))
                     continue
                 if not fobj.is_readable:
-                    skipped_files.append((fobj, 'NOT-READABLE'))
+                    skipped_files.append((fobj, "NOT-READABLE"))
                     continue
                 max_file_size = max(max_file_size, fobj.size)
                 min_file_size = min(min_file_size, fobj.size)
@@ -242,8 +243,7 @@ class FileCollector:
         total_file_size = FileSize(total_file_size)
 
         self.walked_dirs[root_dir] = FileSizeStats(
-            num_files, total_file_size,
-            min_file_size, max_file_size
+            num_files, total_file_size, min_file_size, max_file_size
         )
         self._last_dir = root_dir
         return collected_files, skipped_files

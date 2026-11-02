@@ -1,11 +1,10 @@
-
 import logging
 import shutil
 
 import tomlkit
 
 import cubitools.commons.utils_func.payloads as ctpl
-from cubitools import __debug_run__, __version__, __package__
+from cubitools import __debug_run__, __package__, __version__
 from cubitools.commons.constants import __STRUCT_INIT_LOG_HANDLER
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 
@@ -20,11 +19,14 @@ else:
 
 
 class CubiToolsConfig:
-
     __slots__ = [
-        "config_file", "config", "logger",
-        "git_remotes", "git_accounts", "git_presets",
-        "templates"
+        "config_file",
+        "config",
+        "logger",
+        "git_remotes",
+        "git_accounts",
+        "git_presets",
+        "templates",
     ]
 
     def __init__(self, config_file, logger):
@@ -39,7 +41,6 @@ class CubiToolsConfig:
         return None
 
     def _load_config_file(self):
-
         if not self.config_file.is_file():
             warn = (
                 "No CUBI-Tools config file detected "
@@ -51,7 +52,7 @@ class CubiToolsConfig:
             try:
                 self.config_file.parent.mkdir(exist_ok=True, parents=True)
                 shutil.copy(default_config_path, self.config_file)
-            except (IOError,OSError) as exc:
+            except (IOError, OSError) as exc:
                 err_msg = (
                     f"Could not copy default config to location: {self.config_file} - "
                     f"Error message: {str(exc)} - "
@@ -73,8 +74,7 @@ class CubiToolsConfig:
 
     def set_logger(self, logger):
         msg = (
-            f"Replacing active logger {self.logger.name} "
-            f"with new logger {logger.name}"
+            f"Replacing active logger {self.logger.name} with new logger {logger.name}"
         )
         self.logger.debug(msg)
         self.logger = logger

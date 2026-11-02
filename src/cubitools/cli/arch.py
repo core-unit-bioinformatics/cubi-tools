@@ -1,25 +1,29 @@
-
 import collections as col
 import math
 import multiprocessing as mp
 import os
 import pathlib as pl
-from queue import Empty as QEmpty
 import time
+from queue import Empty as QEmpty
 
-from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
+import cubitools.commons.utils_func.checksums as ctchk
+import cubitools.commons.utils_func.files as ctfiles
 from cubitools.commons.config import CUBITOOLS_CONFIG as CT_CONFIG
-from cubitools.commons.enums import Compression, PathType, PathComponent, Checksum, FileManifestType, FileManifestExt
+from cubitools.commons.enums import (
+    Checksum,
+    Compression,
+    FileManifestExt,
+    FileManifestType,
+    PathComponent,
+    PathType,
+)
+from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.utils_cls.file import File
-from cubitools.commons.utils_cls.filesize import FileSize
 from cubitools.commons.utils_cls.filecollector import FileCollector
+from cubitools.commons.utils_cls.filesize import FileSize
 from cubitools.commons.utils_cls.io_path import IOPath
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
 from cubitools.commons.utils_cls.syscall import SysCallInterface
-import cubitools.commons.utils_func.checksums as ctchk
-import cubitools.commons.utils_func.files as ctfiles
-
-
 
 LOGGER_NAME = __name__
 LOGGER = CubiToolsLogger(LOGGER_NAME)
@@ -28,16 +32,23 @@ LOGGER = CubiToolsLogger(LOGGER_NAME)
 ArchiveWorkPackage = col.namedtuple(
     "ArchiveWorkPackage",
     [
-        "arch_dir", "batch_num", "batch_total", "compression",
-        "out_prefix", "scratch_dir", "arch_files",
-        "manifest", "no_manifest_header", "manifest_only",
-        "dry_run", "cleanup"
-    ]
+        "arch_dir",
+        "batch_num",
+        "batch_total",
+        "compression",
+        "out_prefix",
+        "scratch_dir",
+        "arch_files",
+        "manifest",
+        "no_manifest_header",
+        "manifest_only",
+        "dry_run",
+        "cleanup",
+    ],
 )
 
 
 def get_subcommand_parser(subparsers):
-
     subcmd_name = "arch"
     subcmd_desc = (
         "CUBI-Tools subcommand to produce (compressed) tar archives "
@@ -52,45 +63,50 @@ def get_subcommand_parser(subparsers):
     )
 
     parser.add_argument(
-        "--archive-dirs", "-a",
+        "--archive-dirs",
+        "-a",
         type=IOPath.input_dir,
         nargs="+",
         dest="archive_dirs",
         required=True,
-        help=""
+        help="",
     )
 
     parser.add_argument(
-        "--out-prefix", "-op",
+        "--out-prefix",
+        "-op",
         type=IOPath.output_prefix,
         dest="out_prefix",
         required=True,
-        help=""
+        help="",
     )
 
     compress_members = list(Compression.__members__)
     parser.add_argument(
-        "--compress", "-c",
+        "--compress",
+        "-c",
         type=str,
         choices=compress_members,
         default=Compression.gzip.name,
         dest="compression",
-        help=f"Select tar compression tool. Default: {Compression.gzip.name}"
+        help=f"Select tar compression tool. Default: {Compression.gzip.name}",
     )
 
     checksum_members = list(Checksum.__members__)
     parser.add_argument(
-        "--checksums", "-chk",
+        "--checksums",
+        "-chk",
         type=str,
         nargs="*",
         choices=checksum_members,
         default=[Checksum.md5.name, Checksum.sha256.name],
         dest="checksums",
-        help=f"Select checksum(s) to compute. Default: {Checksum.md5.name, Checksum.sha256.name}"
+        help=f"Select checksum(s) to compute. Default: {Checksum.md5.name, Checksum.sha256.name}",
     )
 
     parser.add_argument(
-        "--chunk-limit", "-lim",
+        "--chunk-limit",
+        "-lim",
         type=str,
         default="1t",
         dest="chunk_limit",
@@ -99,11 +115,12 @@ def get_subcommand_parser(subparsers):
             "create several chunks not larger than this limit "
             "if necessary. Set to -1 to deactivate. "
             "Default: 1t[erabyte]"
-        )
+        ),
     )
 
     parser.add_argument(
-        "--scratch-dir", "-s",
+        "--scratch-dir",
+        "-s",
         type=IOPath.output_dir,
         default=None,
         dest="scratch_dir",
@@ -112,12 +129,13 @@ def get_subcommand_parser(subparsers):
             "Setting this option may be required if the source file system has "
             "not enough free space to create the tar archives. Usually, this "
             "makes most sense in conjunction with the '--cleanup' option."
-        )
+        ),
     )
 
     manifest_members = list(FileManifestType.__members__)
     parser.add_argument(
-        "--manifest", "-m",
+        "--manifest",
+        "-m",
         type=str,
         choices=manifest_members,
         default=FileManifestType.complete.name,
@@ -129,27 +147,30 @@ def get_subcommand_parser(subparsers):
             "(3) coreutils: list relative file path and checksum (format is compatible to GNU coreutils md5sum, sha1sum etc.) "
             "(4) skip: do not create a file manifest (discouraged). "
             f"Default: {FileManifestType.complete.name}"
-        )
+        ),
     )
 
     parser.add_argument(
-        "--manifest-only", "-mly",
+        "--manifest-only",
+        "-mly",
         action="store_true",
         default=False,
         dest="manifest_only",
-        help="Only create the file manifest(s) and skip creating the tar archive(s). Default: False"
+        help="Only create the file manifest(s) and skip creating the tar archive(s). Default: False",
     )
 
     parser.add_argument(
-        "--no-manifest-header", "-nhd",
+        "--no-manifest-header",
+        "-nhd",
         action="store_true",
         default=False,
         dest="no_manifest_header",
-        help="Do not add a header row to the file manifest output. Default: False"
+        help="Do not add a header row to the file manifest output. Default: False",
     )
 
     parser.add_argument(
-        "--exclude-dir", "-ex-dir",
+        "--exclude-dir",
+        "-ex-dir",
         type=str,
         nargs="*",
         default=[PathType.hidden.name, PathType.symbolic.name],
@@ -159,11 +180,12 @@ def get_subcommand_parser(subparsers):
             "or attributes. These arguments are checked before include. "
             "Default: 'hidden' and 'symbolic' (= skip over hidden directories and "
             "do not walk into/follow symbolic link directories)."
-        )
+        ),
     )
 
     parser.add_argument(
-        "--exclude-file", "-ex-file",
+        "--exclude-file",
+        "-ex-file",
         type=str,
         nargs="*",
         default=[PathType.hidden.name, PathType.symbolic.name],
@@ -173,11 +195,12 @@ def get_subcommand_parser(subparsers):
             "or attributes. These arguments are checked before include. "
             "Default: 'hidden' and 'symbolic' (= skip over hidden files and "
             "folders and symbolic links)."
-        )
+        ),
     )
 
     parser.add_argument(
-        "--include-dir", "-in-dir",
+        "--include-dir",
+        "-in-dir",
         type=str,
         nargs="*",
         default=None,
@@ -185,11 +208,12 @@ def get_subcommand_parser(subparsers):
         help=(
             "Include only directories matching ANY of these glob patterns. "
             "Default: None (= include all directories that are NOT excluded)."
-        )
+        ),
     )
 
     parser.add_argument(
-        "--include-file", "-in-file",
+        "--include-file",
+        "-in-file",
         type=str,
         nargs="*",
         default=None,
@@ -197,15 +221,16 @@ def get_subcommand_parser(subparsers):
         help=(
             "Include only files (by name) matching ANY of these glob patterns. "
             "Default: None (= include all files that are NOT excluded)."
-        )
+        ),
     )
 
     parser.add_argument(
-        "--cleanup", "-clean",
+        "--cleanup",
+        "-clean",
         action="store_true",
         default=False,
         dest="cleanup",
-        help="Delete the archived files and (empty) folders."
+        help="Delete the archived files and (empty) folders.",
     )
 
     parser.set_defaults(exec=exec_arch_module)
@@ -214,7 +239,6 @@ def get_subcommand_parser(subparsers):
 
 
 def collect_file_paths(archive_dirs, file_collector):
-
     collected_files = dict()
     size_per_dir = dict()
     for arch_dir in archive_dirs:
@@ -235,7 +259,6 @@ def collect_file_paths(archive_dirs, file_collector):
 
 
 def check_chunk_limit(chunk_limit, file_collector):
-
     stats = file_collector.get_stats()
     LOGGER.debug(f"Files collected: {stats.total_files}")
     LOGGER.debug(f"Total file size: {stats.total_size.mb} mb")
@@ -256,7 +279,6 @@ def check_chunk_limit(chunk_limit, file_collector):
 
 
 def group_files_in_batches(archive_files, chunk_limit, arch_dir_sizes):
-
     batch_num = 1
     batch_size = 0
     file_batches = dict()
@@ -281,12 +303,16 @@ def group_files_in_batches(archive_files, chunk_limit, arch_dir_sizes):
             # few files due to the unknown distribution of file
             # sizes per batch. Slightly increasing the active limit
             # leads to a more balanced distribution of files per batch.
-            active_limit = min(chunk_limit, math.ceil(arch_dir_size / split_equal * _fudge_factor))
+            active_limit = min(
+                chunk_limit, math.ceil(arch_dir_size / split_equal * _fudge_factor)
+            )
         LOGGER.debug(f"Batch size limit: {active_limit}")
         for arch_file in arch_files:
             if batch_size + arch_file.size > active_limit:
                 batched_files += len(current_batch)
-                LOGGER.debug(f"Middle batch: {batch_num} / num files: {len(current_batch)}")
+                LOGGER.debug(
+                    f"Middle batch: {batch_num} / num files: {len(current_batch)}"
+                )
                 assert len(current_batch) > 0
                 file_batches[(arch_dir, batch_num, batch_size)] = current_batch
                 batch_num += 1
@@ -411,9 +437,7 @@ def write_file_manifest(basename, work_package):
     manifest_rows = []
 
     for arch_file in work_package.arch_files:
-        manifest_header, manifest_row = arch_file.get_manifest_line(
-            manifest_type
-        )
+        manifest_header, manifest_row = arch_file.get_manifest_line(manifest_type)
         manifest_rows.append(manifest_row)
 
     if not work_package.dry_run:
@@ -424,9 +448,7 @@ def write_file_manifest(basename, work_package):
                 assert manifest_header is not None
                 _ = table.write("\t".join(manifest_header) + "\n")
 
-            _ = table.write("\n".join(
-                "\t".join(row) for row in manifest_rows
-            ) + "\n")
+            _ = table.write("\n".join("\t".join(row) for row in manifest_rows) + "\n")
 
     return manifest_file
 
@@ -494,7 +516,6 @@ def perform_cleanup(files_to_delete, remove_dirs=None):
 
 
 def archive_worker(recvq, sendq):
-
     to_delete = []
     manifest_file = None
     final_out = None
@@ -514,12 +535,20 @@ def archive_worker(recvq, sendq):
         if work_pkg.manifest_only:
             sci = SysCallInterface(working_dir=work_pkg.arch_dir.parent, dry_run=True)
         else:
-            sci = SysCallInterface(working_dir=work_pkg.arch_dir.parent, dry_run=work_pkg.dry_run)
+            sci = SysCallInterface(
+                working_dir=work_pkg.arch_dir.parent, dry_run=work_pkg.dry_run
+            )
         try:
             sci.run(
                 [
-                    "tar", "--create", "--auto-compress", "--verbatim-files-from",
-                    "-T", str(fofn_file), "-f", str(tar_target)
+                    "tar",
+                    "--create",
+                    "--auto-compress",
+                    "--verbatim-files-from",
+                    "-T",
+                    str(fofn_file),
+                    "-f",
+                    str(tar_target),
                 ]
             )
             manifest_file = write_file_manifest(basename, work_pkg)
@@ -534,11 +563,7 @@ def archive_worker(recvq, sendq):
 
         if scratch_out is not None:
             try:
-                sci.run(
-                    [
-                        "rsync", "--checksum", str(scratch_out), str(final_out)
-                    ]
-                )
+                sci.run(["rsync", "--checksum", str(scratch_out), str(final_out)])
             except Exception:
                 # NB: here, we are keeping the generated tar archive
                 if not work_pkg.dry_run:
@@ -552,7 +577,6 @@ def archive_worker(recvq, sendq):
 
         assert final_out is not None
         if not (work_pkg.dry_run or work_pkg.manifest_only):
-
             tar_file = File(abs_path=final_out.resolve(strict=True))
 
             LOGGER.debug("Comuting checksum sha256 for tar archive")
@@ -571,14 +595,12 @@ def archive_worker(recvq, sendq):
 
 
 def archive_folders(file_batches, args):
-
     sync_man = mp.Manager()
     sendq = sync_man.Queue()
     recvq = sync_man.Queue()
 
     workers = [
-        mp.Process(target=archive_worker, args=(sendq, recvq))
-        for _ in range(args.jobs)
+        mp.Process(target=archive_worker, args=(sendq, recvq)) for _ in range(args.jobs)
     ]
     LOGGER.debug(f"Initialized {len(workers)} worker processes")
     [p.start() for p in workers]
@@ -590,10 +612,18 @@ def archive_folders(file_batches, args):
         else:
             bnum = batch_num
         work_pkg = ArchiveWorkPackage(
-            sub_folder, bnum, batch_total, args.compression,
-            args.out_prefix, args.scratch_dir, arch_files,
-            args.manifest, args.no_manifest_header, args.manifest_only,
-            args.dry_run, args.cleanup
+            sub_folder,
+            bnum,
+            batch_total,
+            args.compression,
+            args.out_prefix,
+            args.scratch_dir,
+            arch_files,
+            args.manifest,
+            args.no_manifest_header,
+            args.manifest_only,
+            args.dry_run,
+            args.cleanup,
         )
         sendq.put(work_pkg)
 
@@ -640,7 +670,6 @@ def archive_folders(file_batches, args):
 
 
 def exec_arch_module(args):
-
     LOGGER.set_debug_logging(args.debug)
     CT_CONFIG.set_logger(LOGGER)
 
@@ -655,12 +684,13 @@ def exec_arch_module(args):
 
     chunk_limit = FileSize(args.chunk_limit)
     file_collector = FileCollector(
-        args.exclude_dir, args.exclude_file,
-        args.include_dir, args.include_file
+        args.exclude_dir, args.exclude_file, args.include_dir, args.include_file
     )
 
     LOGGER.debug("Collecting files...")
-    collected_files, size_per_dir = collect_file_paths(args.archive_dirs, file_collector)
+    collected_files, size_per_dir = collect_file_paths(
+        args.archive_dirs, file_collector
+    )
 
     required_checksums = [Checksum[chksum] for chksum in args.checksums]
 
@@ -697,14 +727,15 @@ def exec_arch_module(args):
         LOGGER.debug("Computing checksums...")
         ctchk.add_checksums_to_files(
             ctfiles.get_files_iter(collected_files),
-            required_checksums, args.jobs, LOGGER
+            required_checksums,
+            args.jobs,
+            LOGGER,
         )
 
     file_batches = group_files_in_batches(collected_files, chunk_limit, size_per_dir)
     _ = archive_folders(file_batches, args)
 
     return 0
-
 
 
 if __name__ == "__main__":

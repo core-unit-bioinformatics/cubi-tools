@@ -1,14 +1,16 @@
-
 import os
 import pathlib as pl
 import re
 
-from cubitools.commons.enums import FileSizeUnit, Checksum, ChecksumLength, \
-    FileManifestType, PathComponent
-
+from cubitools.commons.enums import (
+    Checksum,
+    ChecksumLength,
+    FileManifestType,
+    FileSizeUnit,
+    PathComponent,
+)
 from cubitools.commons.utils_cls.filesize import FileSize
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
-
 
 LOGGER_NAME = __name__
 LOGGER = CubiToolsLogger(LOGGER_NAME)
@@ -22,33 +24,34 @@ class File:
     scenario, the file may not exist yet, but it is expected to be created
     during the update process.
     """
-    _abs_path: pl.Path|None = None
-    _rel_path: pl.Path|None = None
-    _rel_base: pl.Path|None = None
-    _size: FileSize|None = None
-    _md5: str|None = None
-    _sha1: str|None = None
-    _sha256: str|None = None
-    exists: bool|None = None
-    is_readable: bool|None = None
-    is_writable: bool|None = None
 
+    _abs_path: pl.Path | None = None
+    _rel_path: pl.Path | None = None
+    _rel_base: pl.Path | None = None
+    _size: FileSize | None = None
+    _md5: str | None = None
+    _sha1: str | None = None
+    _sha256: str | None = None
+    exists: bool | None = None
+    is_readable: bool | None = None
+    is_writable: bool | None = None
 
-    def __init__(self,
-                 abs_path: str|pl.Path|None = None,
-                 rel_path: str|pl.Path|None = None,
-                 rel_base: str|pl.Path|None = None,
-                 md5: str|None = None,
-                 sha1: str|None = None,
-                 sha256: str|None = None
-                ):
+    def __init__(
+        self,
+        abs_path: str | pl.Path | None = None,
+        rel_path: str | pl.Path | None = None,
+        rel_base: str | pl.Path | None = None,
+        md5: str | None = None,
+        sha1: str | None = None,
+        sha256: str | None = None,
+    ):
         # order of operations matter in the case
         # of symlinks; that is because the abs_path
         # is set with a call to resolve(), so we
         # can detect if the file is actually a symlink
-        self.rel_path = rel_path  #type: ignore
-        self.rel_base = rel_base  #type: ignore
-        self.abs_path = abs_path  #type: ignore
+        self.rel_path = rel_path  # type: ignore
+        self.rel_base = rel_base  # type: ignore
+        self.abs_path = abs_path  # type: ignore
         self.md5 = md5
         self.sha1 = sha1
         self.sha256 = sha256
@@ -70,9 +73,7 @@ class File:
             self.abs_path = self.rel_base.joinpath(self.rel_path)
             self._set_file_size()
         elif self.rel_path is None:
-            raise RuntimeError(
-                "Cannot create file instance w/o abs_path or rel_path"
-            )
+            raise RuntimeError("Cannot create file instance w/o abs_path or rel_path")
         else:
             pass
         self._set_is_readable()
@@ -101,7 +102,7 @@ class File:
         assert self.abs_path is not None, self.__str__()
         if not self.exists:
             self.is_readable = False
-        else:       
+        else:
             self.is_readable = os.access(self.abs_path, os.R_OK)
         return None
 
@@ -149,7 +150,8 @@ class File:
         rel_parents = set(list(self.rel_base.parents))
         lcp = sorted(
             abs_parents.intersection(rel_parents),
-            reverse=True, key=lambda p: len(str(p))
+            reverse=True,
+            key=lambda p: len(str(p)),
         )[0]
         if lcp == pl.Path("/"):
             err_msg = (
@@ -159,14 +161,14 @@ class File:
             )
             LOGGER.error(err_msg)
             raise RuntimeError("Corssing file system boundaries")
-        return lcp        
+        return lcp
 
     @property
-    def abs_path(self) -> pl.Path|None:
+    def abs_path(self) -> pl.Path | None:
         return self._abs_path
 
     @abs_path.setter
-    def abs_path(self, path: str|pl.Path) -> None:
+    def abs_path(self, path: str | pl.Path) -> None:
         try:
             # NB: the setter calls resolve() on the path, which
             # will automically resolve symlinks. Desired handling of
@@ -194,28 +196,29 @@ class File:
                     lcp = self._find_longest_common_prefix()
                     self.rel_base = lcp
                     self.rel_path = self.abs_path.relative_to(self.rel_base)
-                    assert self.rel_base.joinpath(self.rel_path) == self.abs_path, \
+                    assert self.rel_base.joinpath(self.rel_path) == self.abs_path, (
                         self.__str__()
+                    )
         except TypeError:
             self._abs_path = None
 
     @property
-    def rel_path(self) -> pl.Path|None:
+    def rel_path(self) -> pl.Path | None:
         return self._rel_path
 
     @rel_path.setter
-    def rel_path(self, path: str|pl.Path) -> None:
+    def rel_path(self, path: str | pl.Path) -> None:
         try:
             self._rel_path = pl.Path(path)
         except TypeError:
             self._rel_path = None
 
     @property
-    def rel_base(self) -> pl.Path|None:
+    def rel_base(self) -> pl.Path | None:
         return self._rel_base
 
     @rel_base.setter
-    def rel_base(self, path: str|pl.Path) -> None:
+    def rel_base(self, path: str | pl.Path) -> None:
         try:
             self._rel_base = pl.Path(path)
         except TypeError:
@@ -227,18 +230,18 @@ class File:
         return self._size.size
 
     @size.setter
-    def size(self, value: int|str|float) -> None:
+    def size(self, value: int | str | float) -> None:
         try:
             self._size = FileSize(value)
         except TypeError:
             self._size = None
 
     @property
-    def md5(self) -> str|None:
+    def md5(self) -> str | None:
         return self._md5
 
     @md5.setter
-    def md5(self, value: str|None) -> None:
+    def md5(self, value: str | None) -> None:
         try:
             self._validate_hash(value, ChecksumLength.md5)
             self._md5 = value
@@ -247,11 +250,11 @@ class File:
             raise
 
     @property
-    def sha1(self) -> str|None:
+    def sha1(self) -> str | None:
         return self._sha1
 
     @sha1.setter
-    def sha1(self, value: str|None) -> None:
+    def sha1(self, value: str | None) -> None:
         try:
             self._validate_hash(value, ChecksumLength.sha1)
             self._sha1 = value
@@ -260,11 +263,11 @@ class File:
             raise
 
     @property
-    def sha256(self) -> str|None:
+    def sha256(self) -> str | None:
         return self._sha256
 
     @sha256.setter
-    def sha256(self, value: str|None) -> None:
+    def sha256(self, value: str | None) -> None:
         try:
             self._validate_hash(value, ChecksumLength.sha256)
             self._sha256 = value
@@ -272,7 +275,7 @@ class File:
             err.add_note(Checksum.sha256.name)
             raise
 
-    def get_unit_size(self, unit: FileSizeUnit) -> int|float:
+    def get_unit_size(self, unit: FileSizeUnit) -> int | float:
         return getattr(self._size, unit.name)
 
     def update(self):

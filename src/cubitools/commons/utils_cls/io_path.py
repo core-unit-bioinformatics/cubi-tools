@@ -1,10 +1,8 @@
-
 import argparse as argp
 import pathlib as pl
 
 
 class IOPath:
-
     def __init__(self):
         return None
 
@@ -26,7 +24,9 @@ class IOPath:
     def output_file(cls, path):
         p = pl.Path(path).resolve(strict=False)
         if p.is_dir():
-            raise argp.ArgumentTypeError(f"Output path points to existing directory: {path}")
+            raise argp.ArgumentTypeError(
+                f"Output path points to existing directory: {path}"
+            )
         return p
 
     @classmethod
@@ -48,4 +48,3 @@ class IOPath:
             )
             raise argp.ArgumentTypeError(err_msg)
         return p
-

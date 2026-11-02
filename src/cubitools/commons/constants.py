@@ -7,6 +7,7 @@ import typing
 
 from cubitools import __debug_run__
 
+
 @dcl.dataclass(frozen=True)
 class CubiToolsConstants:
     timestamp_format: str = "%Y%m%dT%H%M%S"
@@ -46,7 +47,7 @@ CUBITOOLS_CONSTANTS = CubiToolsConstants()
 __STRUCT_INIT_LOG_FMT = logging.Formatter(
     fmt=CUBITOOLS_CONSTANTS.log_fmt_stderr,
     datefmt=CUBITOOLS_CONSTANTS.timestamp_format,
-    style=CUBITOOLS_CONSTANTS.log_fmt_style
+    style=CUBITOOLS_CONSTANTS.log_fmt_style,
 )
 __STRUCT_INIT_LOG_HANDLER = logging.StreamHandler(stream=sys.stderr)
 if __debug_run__:

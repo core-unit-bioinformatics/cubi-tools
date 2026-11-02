@@ -1,4 +1,3 @@
-
 import abc
 import enum
 import re
@@ -14,7 +13,6 @@ class YesOrNo(enum.Enum):
 
 
 class Sanitizer(abc.ABC):
-
     def __init__(self, check: str) -> None:
         self.regexp = re.compile(check)
         return None
@@ -32,7 +30,6 @@ class Sanitizer(abc.ABC):
 
 
 class LiteralSanitizer(Sanitizer):
-
     def __init__(self, check: str) -> None:
         super().__init__(check)
         return None
@@ -45,7 +42,6 @@ class LiteralSanitizer(Sanitizer):
 
 
 class UserAnswer(Sanitizer):
-
     def __init__(self):
         yes_no_options = "(" + "|".join(YesOrNo.__members__) + ")"
         self.regexp = re.compile(yes_no_options)
@@ -68,7 +64,6 @@ class UserAnswer(Sanitizer):
 
 
 class IntSanitizer(Sanitizer):
-
     def __init__(self, check: str) -> None:
         super().__init__(check)
         return None
@@ -81,7 +76,6 @@ class IntSanitizer(Sanitizer):
 
 
 class CommaListSanitizer(Sanitizer):
-
     def __init__(self, check: str) -> None:
         super().__init__(check)
         return None
@@ -98,4 +92,3 @@ class CommaListSanitizer(Sanitizer):
         # note here that we are not returning
         # the comma-sep string
         return values
-

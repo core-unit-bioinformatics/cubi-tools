@@ -12,7 +12,9 @@ try:
     __pkg_metadata__ = impmd.metadata(__package__)
     __license__ = __pkg_metadata__["License-Expression"]
     __prog__ = pl.Path(sys.argv[0]).name
-    __usage__ = f"{__prog__} [general parameters] [subcommand] [subcommand parameters] --- "
+    __usage__ = (
+        f"{__prog__} [general parameters] [subcommand] [subcommand parameters] --- "
+    )
     __cubitools__ = f"{__prog__} v{__version__} ({__license__} license)"
 except impmd.PackageNotFoundError:
     # package is not installed

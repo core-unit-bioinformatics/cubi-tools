@@ -5,11 +5,9 @@ import atexit
 import logging
 import os
 
-from cubitools import __prog__, __usage__, \
-    __version__, __cubitools__
-from cubitools.commons.utils_cls.logging import CubiToolsLogger
 import cubitools.cli.subparsers as subcmd
-
+from cubitools import __cubitools__, __prog__, __usage__, __version__
+from cubitools.commons.utils_cls.logging import CubiToolsLogger
 
 CLEANUP_FILES = []
 
@@ -18,52 +16,54 @@ LOGGER_NAME = "main"
 
 
 def setup_cli_parser():
-
     parser = argp.ArgumentParser(
         prog=__prog__,
         usage=__usage__,
         epilog=__cubitools__,
         formatter_class=argp.RawTextHelpFormatter,
-        exit_on_error=False
+        exit_on_error=False,
     )
 
     general_args = parser.add_argument_group(title="General parameters")
 
     general_args.add_argument(
-        "--dry-run", "-d", "-dry",
+        "--dry-run",
+        "-d",
+        "-dry",
         action="store_true",
         default=False,
         dest="dry_run",
-        help="Explain actions but do not execute them."
+        help="Explain actions but do not execute them.",
     )
 
     general_args.add_argument(
-        "--jobs", "-j",
+        "--jobs",
+        "-j",
         type=int,
         default=1,
         dest="jobs",
-        help="Number of (typically, IO) jobs to execute in parallel. Default: 1"
+        help="Number of (typically, IO) jobs to execute in parallel. Default: 1",
     )
 
     general_args.add_argument(
-        "--version", "-v",
+        "--version",
+        "-v",
         action="version",
         version=f"{__prog__} {__version__}",
-        help="Print the version and exit."
+        help="Print the version and exit.",
     )
 
     general_args.add_argument(
-        "--debug", "-dbg",
+        "--debug",
+        "-dbg",
         action="store_true",
         default=False,
         dest="debug",
-        help="Sets the logging level to DEBUG."
+        help="Sets the logging level to DEBUG.",
     )
 
     subparsers = parser.add_subparsers(
-        title="::: CUBI-Tools subcommands ::",
-        metavar="SUBCMD",
-        dest="subcommand"
+        title="::: CUBI-Tools subcommands ::", metavar="SUBCMD", dest="subcommand"
     )
 
     subcommands = subcmd.add_module_level_parsers(subparsers)
@@ -85,7 +85,6 @@ def setup_cli_parser():
 
 
 def final_cleanup():
-
     for fpath in CLEANUP_FILES:
         try:
             os.remove(fpath)
@@ -95,7 +94,6 @@ def final_cleanup():
 
 
 def run_app():
-
     main_parser = setup_cli_parser()
     try:
         args = main_parser.parse_args()

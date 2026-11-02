@@ -1,4 +1,3 @@
-
 import pathlib as pl
 import urllib.parse as urlp
 
@@ -8,12 +7,13 @@ from cubitools.commons.utils_cls.syscall import SysCallInterface
 
 
 class GitRepository:
-
     def __init__(
-        self, repo_uri: pl.Path|str, git_preset, dry_run: bool,
-        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER
+        self,
+        repo_uri: pl.Path | str,
+        git_preset,
+        dry_run: bool,
+        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER,
     ):
-
         self.logger = logger
 
         if isinstance(repo_uri, str):
@@ -32,7 +32,9 @@ class GitRepository:
             self.server_namespaces = None
             self.remote_source = None
         else:
-            raise TypeError(f"Unexpected type for local_repo_path: {type(repo_uri)} / {repo_uri}")
+            raise TypeError(
+                f"Unexpected type for local_repo_path: {type(repo_uri)} / {repo_uri}"
+            )
         if self.local_path.is_dir():
             wd = self.local_path
             self.is_git_repo = wd.joinpath(".git").is_dir()
@@ -41,8 +43,7 @@ class GitRepository:
             self.is_git_repo = False
 
         self.git_exec = SysCallInterface(
-            working_dir=wd, executable="git",
-            dry_run=dry_run, logger=logger
+            working_dir=wd, executable="git", dry_run=dry_run, logger=logger
         )
         _major, _minor, _patch = self.git_exec.exec_version.split(".")
         if int(_major) < 2 and int(_minor) < 24:
@@ -84,7 +85,9 @@ class GitRepository:
             auth_type = GitAuth.https
             parsed = urlp.urlparse(remote_url)
             if parsed.scheme != GitAuth.https.name:
-                raise ValueError(f"Unexpected URL scheme in git remote URL: {remote_url}")
+                raise ValueError(
+                    f"Unexpected URL scheme in git remote URL: {remote_url}"
+                )
 
         server = parsed.hostname
         handle = parsed.path.strip("/").split("/")[0]
@@ -125,11 +128,10 @@ class GitRepository:
         return remote_url
 
     def _set_user_config(self):
-        """_set_user_config _summary_
-        """
+        """_set_user_config _summary_"""
         self.logger.debug(f"Setting git user config: {self.local_path}")
-        self.git_exec.run(['config', 'user.name', f'"{self.user_name}"'])
-        self.git_exec.run(['config', 'user.email', f'"{self.user_email}"'])
+        self.git_exec.run(["config", "user.name", f'"{self.user_name}"'])
+        self.git_exec.run(["config", "user.email", f'"{self.user_email}"'])
         if not self.git_exec.dry_run:
             assert self.local_path.joinpath(".git").is_dir()
         self.logger.debug(f"Setting git user config - done")
@@ -146,8 +148,7 @@ class GitRepository:
         return None
 
     def _parse_remotes(self):
-        """_parse_remotes
-        """
+        """_parse_remotes"""
         # this only reads, hence 'force_exec'
         out, _ = self.git_exec.run(["remote", "-v"], force_exec=True)
         active_remotes = dict()
@@ -174,8 +175,7 @@ class GitRepository:
         return active_remotes, server_namespaces
 
     def _set_remotes(self):
-        """_set_remotes
-        """
+        """_set_remotes"""
         self.logger.debug(f"Setting remotes for repo: {self.local_path}")
 
         remotes = self.git_preset.remotes
@@ -253,16 +253,19 @@ class GitRepository:
         self.git_exec.run(["remote", "add", "all", prio_remote_url])
 
         for remote_name, remote_url in remote_urls.items():
-            self.logger.debug(f"Adding remote push target for 'all': {remote_name} / {remote_url}")
-            self.git_exec.run(["remote", "set-url", "--add", "--push", "all", remote_url])
+            self.logger.debug(
+                f"Adding remote push target for 'all': {remote_name} / {remote_url}"
+            )
+            self.git_exec.run(
+                ["remote", "set-url", "--add", "--push", "all", remote_url]
+            )
 
         # this is safe to set here
         self.remote_source = prio_remote_url
         return None
 
     def init_repo(self):
-        """init_repo
-        """
+        """init_repo"""
         self.logger.debug(f"Initializing new repo: {self.local_path}")
         try:
             if not self.git_exec.dry_run:
@@ -286,8 +289,7 @@ class GitRepository:
         return None
 
     def norm_repo(self):
-        """norm_repo _summary_
-        """
+        """norm_repo _summary_"""
         if not self.is_git_repo:
             err_msg = (
                 "Cannot normalize git information in path because it is not a "
@@ -303,8 +305,7 @@ class GitRepository:
         return None
 
     def set_user(self):
-        """set_user _summary_
-        """
+        """set_user _summary_"""
         if not self.is_git_repo:
             err_msg = (
                 "Cannot normalize git information in path because it is not a "
@@ -317,8 +318,7 @@ class GitRepository:
         return None
 
     def clone_repo(self):
-        """clone_repo _summary_
-        """
+        """clone_repo _summary_"""
         self.logger.debug(f"Cloning new repo into: {self.local_path}")
         if self.is_git_repo:
             err_msg = (
@@ -327,7 +327,9 @@ class GitRepository:
             )
             self.logger.error(err_msg)
             raise RuntimeError(err_msg)
-        assert self.remote_source is not None, "Remote source URL must be set to clone repository"
+        assert self.remote_source is not None, (
+            "Remote source URL must be set to clone repository"
+        )
         self.git_exec.run(["clone", self.remote_source, str(self.local_path)])
         if not self.git_exec.dry_run:
             # we encapsulate all of this because

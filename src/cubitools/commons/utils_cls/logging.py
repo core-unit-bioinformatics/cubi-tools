@@ -1,4 +1,3 @@
-
 import io
 import logging
 import logging.handlers as loghandler
@@ -10,8 +9,7 @@ from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 
 
 class CubiToolsLogger:
-
-    def __init__(self, run_logger_name: str, debug: bool=False) -> None:
+    def __init__(self, run_logger_name: str, debug: bool = False) -> None:
         """__init__ _summary_
 
         Args:
@@ -54,7 +52,7 @@ class CubiToolsLogger:
         stderr_console_formatter = logging.Formatter(
             fmt=CT_CONST.log_fmt_stderr,
             datefmt=CT_CONST.timestamp_format,
-            style=CT_CONST.log_fmt_style
+            style=CT_CONST.log_fmt_style,
         )
         stderr_stream_handler = logging.StreamHandler(stream=sys.stderr)
         if debug:
@@ -66,13 +64,15 @@ class CubiToolsLogger:
         file_formatter = logging.Formatter(
             fmt=CT_CONST.log_fmt_file,
             datefmt=CT_CONST.timestamp_format,
-            style=CT_CONST.log_fmt_style
+            style=CT_CONST.log_fmt_style,
         )
         file_handler = loghandler.RotatingFileHandler(
             filename=CT_ENV.log_file,
-            mode="a", delay=False,
+            mode="a",
+            delay=False,
             encoding=CT_CONST.default_text_encoding,
-            maxBytes=524288, backupCount=2
+            maxBytes=524288,
+            backupCount=2,
         )
         if debug:
             file_handler.setLevel(logging.DEBUG)
@@ -97,7 +97,7 @@ class CubiToolsLogger:
         stdout_console_formatter = logging.Formatter(
             fmt=CT_CONST.log_fmt_stdout,
             datefmt=CT_CONST.timestamp_format,
-            style=CT_CONST.log_fmt_style
+            style=CT_CONST.log_fmt_style,
         )
         stdout_stream_handler = logging.StreamHandler(stream=sys.stdout)
         stdout_stream_handler.setLevel(logging.INFO)
@@ -117,7 +117,6 @@ class CubiToolsLogger:
         return None
 
     def set_debug_logging(self, debug: bool) -> None:
-
         if not debug:
             return None
 
@@ -171,9 +170,7 @@ class CubiToolsLogger:
             if line.strip().startswith("^^^"):
                 continue
             line_num += 1
-            log_lines.append(
-                f"[trbL:{line_num}] {line.strip()}"
-            )
+            log_lines.append(f"[trbL:{line_num}] {line.strip()}")
         log_lines = " /// ".join(log_lines) + "\n"
         self._system(log_lines, logging.CRITICAL)
         return None
@@ -266,4 +263,3 @@ class MockLogger:
 
 # Stateless, hence safe to share as default argument
 MOCK_LOGGER = MockLogger()
-

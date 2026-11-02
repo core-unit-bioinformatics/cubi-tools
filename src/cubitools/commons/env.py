@@ -8,9 +8,8 @@ import socket
 import tomlkit
 
 from cubitools import __debug_run__
-from cubitools.commons.constants import CUBITOOLS_CONSTANTS as CT_CONST
 from cubitools.commons.constants import __STRUCT_INIT_LOG_HANDLER
-
+from cubitools.commons.constants import CUBITOOLS_CONSTANTS as CT_CONST
 
 # see explanation in commons::constants.py
 LOGGER_NAME = f"STRUCTINIT::{__name__}"
@@ -29,6 +28,7 @@ class CubiToolsEnv:
     https://specifications.freedesktop.org/basedir/latest/
     See the comments below for details.
     """
+
     path: str
     user_home: pl.Path
     user_name: str
@@ -59,7 +59,6 @@ class CubiToolsEnv:
 
 
 class CubiToolsEnvBuilder:
-
     __slots__ = ["user_home", "logger"]
 
     def __init__(self, logger):
@@ -81,35 +80,30 @@ class CubiToolsEnvBuilder:
 
             fmt = {"USERHOME": self.user_home}
             ct_env["config_dir"] = self._set_env_dir(
-                os_env, CT_CONST.xdg_config_home,
+                os_env,
+                CT_CONST.xdg_config_home,
                 CT_CONST.config_default.format(**fmt),
             )
             ct_env["state_dir"] = self._set_env_dir(
-                os_env, CT_CONST.xdg_state_home,
+                os_env,
+                CT_CONST.xdg_state_home,
                 CT_CONST.state_default.format(**fmt),
             )
             ct_env["cache_dir"] = self._set_env_dir(
-                os_env, CT_CONST.xdg_cache_home,
+                os_env,
+                CT_CONST.xdg_cache_home,
                 CT_CONST.cache_default.format(**fmt),
             )
-            ct_env["env_file"] = ct_env["state_dir"].joinpath(
-                CT_CONST.env_file_name
-            )
-            ct_env["cfg_file"] = ct_env["config_dir"].joinpath(
-                CT_CONST.cfg_file_name
-            )
-            ct_env["log_file"] = ct_env["state_dir"].joinpath(
-                CT_CONST.log_file_name
-            )
+            ct_env["env_file"] = ct_env["state_dir"].joinpath(CT_CONST.env_file_name)
+            ct_env["cfg_file"] = ct_env["config_dir"].joinpath(CT_CONST.cfg_file_name)
+            ct_env["log_file"] = ct_env["state_dir"].joinpath(CT_CONST.log_file_name)
             ct_env = CubiToolsEnv(**ct_env)
         self._dump_env_file(ct_env)
         return ct_env
 
     def _check_custom_env(self, os_env):
         try:
-            custom_env = pl.Path(
-                os_env[CT_CONST.cubi_tools_env]
-            ).resolve(strict=True)
+            custom_env = pl.Path(os_env[CT_CONST.cubi_tools_env]).resolve(strict=True)
         except (KeyError, FileNotFoundError):
             custom_env = None
             loaded_env = dict()
@@ -128,10 +122,7 @@ class CubiToolsEnvBuilder:
         return custom_env, loaded_env
 
     def _dump_env_file(self, ct_env):
-
-        simple_env = dict(
-            (k, str(v)) for k, v in dcl.asdict(ct_env).items()
-        )
+        simple_env = dict((k, str(v)) for k, v in dcl.asdict(ct_env).items())
         _file_enc = CT_CONST.default_text_encoding
         with open(ct_env.env_file, "w", encoding=_file_enc) as env_dump:
             tomlkit.dump(simple_env, env_dump)
