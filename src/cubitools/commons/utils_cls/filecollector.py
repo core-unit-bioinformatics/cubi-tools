@@ -3,6 +3,7 @@ import functools as fnt
 import os
 import pathlib as pl
 import sys
+import typing as typ
 
 from cubitools.commons.enums import PathType
 from cubitools.commons.utils_cls.file import File
@@ -29,11 +30,11 @@ class FileCollector:
         exclude_dir: list[str] | None,
         exclude_file: list[str] | None,
         include_dir: list[str] | None,
-        include_file: list[str],
+        include_file: list[str] | None,
     ) -> None:
         self._follow_symlink_dirs = False
-        self.walked_dirs = dict()
-        self._last_dir = None
+        self.walked_dirs: dict[pl.Path, FileSizeStats] = dict()
+        self._last_dir: pl.Path | None = None
         self._exclude_symlinked_file = lambda _: False
         self._exclude_dir = self._init_matcher(exclude_dir, False, False)
         self._exclude_file = self._init_matcher(exclude_file, True, False)
@@ -41,7 +42,9 @@ class FileCollector:
         self._include_file = self._init_matcher(include_file, True, True)
         return None
 
-    def _init_matcher(self, glob_patterns, match_filename, include):
+    def _init_matcher(
+        self, glob_patterns: list[str] | None, match_filename: bool, include: bool
+    ) -> list[typ.Callable[[str], bool]]:
         matching_functions = []
         if glob_patterns is None:
             # default matcher will be added below
@@ -73,10 +76,10 @@ class FileCollector:
             matching_functions.append(matcher)
         return matching_functions
 
-    def _get_match_default(self, include):
+    def _get_match_default(self, include: bool) -> typ.Callable[[str], bool]:
         if include:
 
-            def include_all(path) -> bool:
+            def include_all(path: str) -> bool:
                 """Default matcher for include check,
                 always True, i.e. include everything
 
@@ -91,7 +94,7 @@ class FileCollector:
             return include_all
         else:
 
-            def exclude_none(path) -> bool:
+            def exclude_none(path: str) -> bool:
                 """Default matcher for exclude check,
                 always False, i.e. exclude nothing
 
@@ -105,26 +108,26 @@ class FileCollector:
 
             return exclude_none
 
-    def _get_match_hidden(self):
-        def is_hidden(file_path) -> bool:
+    def _get_match_hidden(self) -> typ.Callable[[str], bool]:
+        def is_hidden(file_path: str) -> bool:
             return pl.Path(file_path).name.startswith(".")
 
         return is_hidden
 
-    def _get_match_symlink(self):
-        def is_symlink(file_path) -> bool:
+    def _get_match_symlink(self) -> typ.Callable[[pl.Path], bool]:
+        def is_symlink(file_path: pl.Path) -> bool:
             return pl.Path(file_path).is_symlink()
 
         return is_symlink
 
-    def _get_match_generic(self, pattern: str):
-        def glob_match(glob_pat: str, path) -> bool:
+    def _get_match_generic(self, pattern: str) -> typ.Callable[[str], bool]:
+        def glob_match(glob_pat: str, path: str) -> bool:
             return fnm.fnmatch(path, glob_pat)
 
         partial = fnt.partial(glob_match, *(pattern,))
         return partial
 
-    def keep_dirs(self, dir_paths: list[str]):
+    def keep_dirs(self, dir_paths: list[str]) -> None:
         """This method is specifically written to be compatible
         with `os.walk` in terms of filtering the list of subdirs
         in place. If not modified in place, `os.walk` will recurse
@@ -166,13 +169,13 @@ class FileCollector:
 
         return retain_files
 
-    def get_last_stats(self):
+    def get_last_stats(self) -> FileSizeStats | None:
         if self._last_dir is None:
             return None
         else:
             return self.walked_dirs[self._last_dir]
 
-    def get_stats(self, root_dir=None) -> FileSizeStats:
+    def get_stats(self, root_dir: pl.Path | None = None) -> FileSizeStats:
         if root_dir is not None:
             return self.walked_dirs[root_dir]
 
@@ -190,7 +193,9 @@ class FileCollector:
         )
         return stats
 
-    def collect_files(self, root_dir: pl.Path):
+    def collect_files(
+        self, root_dir: pl.Path
+    ) -> tuple[list[File], list[tuple[File, str]]]:
         """
         Collects files from the specified root directory.
 

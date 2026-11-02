@@ -5,11 +5,12 @@ from queue import Empty as QEmpty
 
 from cubitools.commons.enums import Checksum
 from cubitools.commons.utils_cls.file import File
+from cubitools.commons.utils_cls.logging import CubiToolsLogger, MockLogger
 from cubitools.commons.utils_cls.syscall import SysCallInterface
 
 
-def _checksum_worker(inq, outq):
-    chk_sci = dict()
+def _checksum_worker(inq, outq) -> None:
+    chk_sci: dict[Checksum, SysCallInterface] = dict()
 
     while 1:
         request = inq.get()
@@ -37,7 +38,9 @@ def _checksum_worker(inq, outq):
     return None
 
 
-def add_checksum_to_file(file: File, checksum: Checksum, logger):
+def add_checksum_to_file(
+    file: File, checksum: Checksum, logger: CubiToolsLogger | MockLogger
+) -> None:
     """add_checksum_to_file _summary_
 
     Args:
@@ -69,8 +72,11 @@ def add_checksum_to_file(file: File, checksum: Checksum, logger):
 
 
 def add_checksums_to_files(
-    files: list[File] | typ.Iterable[File], checksums: list[Checksum], jobs: int, logger
-):
+    files: list[File] | typ.Iterable[File],
+    checksums: list[Checksum],
+    jobs: int,
+    logger: CubiToolsLogger | MockLogger,
+) -> None:
     sync_man = mp.Manager()
     sendq = sync_man.Queue()
     recvq = sync_man.Queue()
@@ -81,7 +87,7 @@ def add_checksums_to_files(
     logger.debug(f"Initialized {jobs} worker processes")
     [p.start() for p in workers]
 
-    file_buffer = []
+    file_buffer: list[File] = []
     try:
         num_files = len(files)  # type: ignore
     except TypeError:

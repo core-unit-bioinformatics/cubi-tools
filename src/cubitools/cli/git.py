@@ -1,3 +1,4 @@
+import argparse as argp
 import collections as col
 import pathlib as pl
 import subprocess as sp
@@ -14,7 +15,9 @@ LOGGER_NAME = __name__
 LOGGER = ctlog.CubiToolsLogger(LOGGER_NAME)
 
 
-def get_subcommand_parser(subparsers):
+def get_subcommand_parser(
+    subparsers: "argp._SubParsersAction[argp.ArgumentParser]",
+) -> tuple[str, str]:
     subcmd_name = "git"
     subcmd_desc = (
         "CUBI-Tools subcommand to initialize, clone or "
@@ -369,7 +372,7 @@ def init_git(args):
     return git_infos, repo_wd
 
 
-def exec_git_module(args):
+def exec_git_module(args: argp.Namespace) -> int:
     LOGGER.set_debug_logging(args.debug)
     CT_CONFIG.set_logger(LOGGER)
 

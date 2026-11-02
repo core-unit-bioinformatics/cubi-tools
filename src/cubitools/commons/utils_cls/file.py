@@ -44,7 +44,7 @@ class File:
         md5: str | None = None,
         sha1: str | None = None,
         sha256: str | None = None,
-    ):
+    ) -> None:
         # order of operations matter in the case
         # of symlinks; that is because the abs_path
         # is set with a call to resolve(), so we
@@ -66,7 +66,7 @@ class File:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.abs_path is not None:
             self._set_file_size()
         elif self.rel_base is not None and self.rel_path is not None:
@@ -80,7 +80,7 @@ class File:
         self._set_is_writable()
         return None
 
-    def _set_file_size(self):
+    def _set_file_size(self) -> None:
         """Set the file size attribute (size in bye) if the file exists.
         Note that this function is called in the __post_init__ function,
         which ensures that abs_path is set.
@@ -98,7 +98,7 @@ class File:
             self.exists = False
         return None
 
-    def _set_is_readable(self) -> bool:
+    def _set_is_readable(self) -> None:
         assert self.abs_path is not None, self.__str__()
         if not self.exists:
             self.is_readable = False
@@ -106,7 +106,7 @@ class File:
             self.is_readable = os.access(self.abs_path, os.R_OK)
         return None
 
-    def _set_is_writable(self) -> bool:
+    def _set_is_writable(self) -> None:
         assert self.abs_path is not None, self.__str__()
         if not self.exists:
             # Why None for writable?
@@ -119,7 +119,7 @@ class File:
             self.is_writable = os.access(self.abs_path, os.W_OK)
         return None
 
-    def _validate_hash(self, hash, fixed_length) -> None:
+    def _validate_hash(self, hash, fixed_length: int) -> None:
         if hash is None:
             pass
         elif isinstance(hash, str):
@@ -278,7 +278,7 @@ class File:
     def get_unit_size(self, unit: FileSizeUnit) -> int | float:
         return getattr(self._size, unit.name)
 
-    def update(self):
+    def update(self) -> None:
         """Update the file information, e.g., if the file has been
         modified or newly created, this will update the file size and
         existence information.
@@ -289,7 +289,7 @@ class File:
         self._set_is_writable()
         return None
 
-    def delete(self):
+    def delete(self) -> None:
         """Delete this file from the file system.
         This sets this _exists member to 0 if the operation
         succeeds or if a FileNotFoundError is raised.
@@ -335,7 +335,7 @@ class File:
         except KeyError:
             path_info = PathComponent(path_info)
 
-        fofn_entry = None
+        fofn_entry: str | pl.Path | None = None
         if path_info == PathComponent.filename:
             if self.abs_path is not None:
                 fofn_entry = self.abs_path.name
@@ -357,7 +357,9 @@ class File:
             fofn_entry = rel_parent
         return str(fofn_entry)
 
-    def get_manifest_line(self, manifest_type):
+    def get_manifest_line(
+        self, manifest_type
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """get_manifest_line _summary_
 
         Args:

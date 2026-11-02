@@ -7,12 +7,14 @@ import cubitools.commons.utils_cls.sanitizers as sanitizers
 @dcl.dataclass(frozen=True)
 class GitConfigPreset:
     name: str
-    remotes: list[str]
-    remote_handles: list[str]
-    local_user: str
+    remotes: list["GitConfigRemote"]
+    remote_handles: list["GitConfigAccountUser | GitConfigAccountOrg"]
+    local_user: "GitConfigAccountUser"
 
     @classmethod
-    def get_user_queries(cls):
+    def get_user_queries(
+        cls,
+    ) -> tuple[str, list[tuple[str, sanitizers.Sanitizer, str]]]:
         opening = (
             "Please provide the following information to configure a new git preset:"
         )
@@ -47,7 +49,7 @@ class GitConfigRemote:
     server: str
     priority: typ.Literal[0, 1] = 1
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.priority not in [0, 1]:
             err_msg = (
                 f"Invalid priority value: {self.priority} - Priority must be 0 or 1."

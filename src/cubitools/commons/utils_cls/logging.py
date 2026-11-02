@@ -27,7 +27,7 @@ class CubiToolsLogger:
         self._init_run_logger(run_logger_name, debug)
         no_user_logger = run_logger_name == "main" or "STRUCTINIT" in run_logger_name
         if no_user_logger:
-            self.user_logger = None
+            self.user_logger: logging.Logger | None = None
         else:
             self._init_user_logger()
 

@@ -13,18 +13,18 @@ from cubitools.commons.utils_cls.logging import MOCK_LOGGER, CubiToolsLogger, Mo
 class SysCallInterface:
     def __init__(
         self,
-        working_dir=None,
-        executable=None,
-        dry_run=False,
+        working_dir: str | pl.Path | None = None,
+        executable: str | None = None,
+        dry_run: bool = False,
         logger: CubiToolsLogger | MockLogger = MOCK_LOGGER,
-    ):
+    ) -> None:
         self._compute_object_id()
         self.logger = logger
         self.dry_run = dry_run
         self.wd = pl.Path(".").resolve(strict=True)
         if working_dir is not None:
             self.set_wd(working_dir)
-        self.exec = None
+        self.exec: str | None = None
         self.exec_version = "unknown"
         if executable is not None:
             self.set_exec(executable)

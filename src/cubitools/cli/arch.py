@@ -1,3 +1,4 @@
+import argparse as argp
 import collections as col
 import math
 import multiprocessing as mp
@@ -48,7 +49,9 @@ ArchiveWorkPackage = col.namedtuple(
 )
 
 
-def get_subcommand_parser(subparsers):
+def get_subcommand_parser(
+    subparsers: "argp._SubParsersAction[argp.ArgumentParser]",
+) -> tuple[str, str]:
     subcmd_name = "arch"
     subcmd_desc = (
         "CUBI-Tools subcommand to produce (compressed) tar archives "
@@ -238,7 +241,9 @@ def get_subcommand_parser(subparsers):
     return subcmd_name, subcmd_desc
 
 
-def collect_file_paths(archive_dirs, file_collector):
+def collect_file_paths(
+    archive_dirs: list[pl.Path], file_collector: FileCollector
+) -> tuple[dict[pl.Path, list[File]], dict[pl.Path, FileSize]]:
     collected_files = dict()
     size_per_dir = dict()
     for arch_dir in archive_dirs:
@@ -258,7 +263,7 @@ def collect_file_paths(archive_dirs, file_collector):
     return collected_files, size_per_dir
 
 
-def check_chunk_limit(chunk_limit, file_collector):
+def check_chunk_limit(chunk_limit: FileSize, file_collector: FileCollector) -> None:
     stats = file_collector.get_stats()
     LOGGER.debug(f"Files collected: {stats.total_files}")
     LOGGER.debug(f"Total file size: {stats.total_size.mb} mb")
@@ -278,13 +283,17 @@ def check_chunk_limit(chunk_limit, file_collector):
     return None
 
 
-def group_files_in_batches(archive_files, chunk_limit, arch_dir_sizes):
+def group_files_in_batches(
+    archive_files: dict[pl.Path, list[File]],
+    chunk_limit: FileSize,
+    arch_dir_sizes: dict[pl.Path, FileSize],
+) -> dict[tuple[pl.Path, int, int], list[File]]:
     batch_num = 1
     batch_size = 0
     file_batches = dict()
     total_files = 0
     batched_files = 0
-    current_batch = []  # just to calm pylint in assert below
+    current_batch: list[File] = []  # just to calm pylint in assert below
     for arch_dir, arch_files in archive_files.items():
         total_files += len(arch_files)
         current_batch = []
@@ -345,7 +354,7 @@ def group_files_in_batches(archive_files, chunk_limit, arch_dir_sizes):
     return file_batches
 
 
-def write_tar_file_listing(work_package):
+def write_tar_file_listing(work_package: ArchiveWorkPackage) -> tuple[pl.Path, str]:
     """This function writes a list of files into
     a fofn file that is passed to tar via the -T option.
     All paths in the file are relative to parent
@@ -396,7 +405,7 @@ def write_tar_file_listing(work_package):
     return fofn_file, basename
 
 
-def manifest_has_header(manifest_file):
+def manifest_has_header(manifest_file) -> bool:
     """manifest_has_header _summary_
 
     Args:
@@ -418,7 +427,9 @@ def manifest_has_header(manifest_file):
         return False
 
 
-def write_file_manifest(basename, work_package):
+def write_file_manifest(
+    basename: str, work_package: ArchiveWorkPackage
+) -> pl.Path | None:
     """write_file_manifest _summary_
 
     Args:
@@ -453,7 +464,9 @@ def write_file_manifest(basename, work_package):
     return manifest_file
 
 
-def determine_tar_out_paths(basename, work_package):
+def determine_tar_out_paths(
+    basename: str, work_package: ArchiveWorkPackage
+) -> tuple[pl.Path | None, pl.Path]:
     """determine_tar_out_paths _summary_
 
     Args:
@@ -477,7 +490,7 @@ def determine_tar_out_paths(basename, work_package):
     return scratch_out, final_out
 
 
-def perform_cleanup(files_to_delete, remove_dirs=None):
+def perform_cleanup(files_to_delete, remove_dirs: pl.Path | None = None) -> None:
     """perform_cleanup _summary_
 
     Args:
@@ -515,8 +528,8 @@ def perform_cleanup(files_to_delete, remove_dirs=None):
     return
 
 
-def archive_worker(recvq, sendq):
-    to_delete = []
+def archive_worker(recvq, sendq) -> None:
+    to_delete: list[pl.Path | None] = []
     manifest_file = None
     final_out = None
     while 1:
@@ -594,7 +607,9 @@ def archive_worker(recvq, sendq):
     return None
 
 
-def archive_folders(file_batches, args):
+def archive_folders(
+    file_batches: dict[tuple[pl.Path, int, int], list[File]], args: argp.Namespace
+) -> None:
     sync_man = mp.Manager()
     sendq = sync_man.Queue()
     recvq = sync_man.Queue()
@@ -669,7 +684,7 @@ def archive_folders(file_batches, args):
     return None
 
 
-def exec_arch_module(args):
+def exec_arch_module(args: argp.Namespace) -> int:
     LOGGER.set_debug_logging(args.debug)
     CT_CONFIG.set_logger(LOGGER)
 

@@ -16,7 +16,7 @@ from cubitools.commons.utils_cls.git_config import (
 )
 
 
-def build_git_config():
+def build_git_config() -> None:
     """This is a convenience function to trigger
     the typed built of the git configuration that
     is loaded by default when the CUBITOOLS config
@@ -48,7 +48,7 @@ def build_git_config():
     return None
 
 
-def _build_git_remotes(git_remotes_spec):
+def _build_git_remotes(git_remotes_spec) -> dict[str, GitConfigRemote]:
     """build_git_remotes _summary_"""
     git_remotes = dict()
     for remote in git_remotes_spec:
@@ -60,13 +60,15 @@ def _build_git_remotes(git_remotes_spec):
     return git_remotes
 
 
-def _build_git_accounts(git_accounts_spec, git_remotes):
+def _build_git_accounts(
+    git_accounts_spec, git_remotes: dict[str, GitConfigRemote]
+) -> dict[str, GitConfigAccountUser | GitConfigAccountOrg]:
     """build_git_accounts
     Args:
         git_accounts_spec (_type_): _description_
         git_remotes (_type_): _description_
     """
-    git_accounts = dict()
+    git_accounts: dict[str, GitConfigAccountUser | GitConfigAccountOrg] = dict()
     for account in git_accounts_spec:
         set_remotes = []
         for remote in account["remotes"]:
@@ -95,7 +97,11 @@ def _build_git_accounts(git_accounts_spec, git_remotes):
     return git_accounts
 
 
-def _build_git_presets(git_presets_spec, git_remotes, git_accounts):
+def _build_git_presets(
+    git_presets_spec,
+    git_remotes: dict[str, GitConfigRemote],
+    git_accounts: dict[str, GitConfigAccountUser | GitConfigAccountOrg],
+) -> dict[str, GitConfigPreset]:
     """build_git_presets
 
     Args:

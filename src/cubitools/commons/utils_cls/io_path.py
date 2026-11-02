@@ -3,25 +3,25 @@ import pathlib as pl
 
 
 class IOPath:
-    def __init__(self):
+    def __init__(self) -> None:
         return None
 
     @classmethod
-    def input_file(cls, path):
+    def input_file(cls, path: str) -> pl.Path:
         p = pl.Path(path).resolve(strict=True)
         if not p.is_file():
             raise argp.ArgumentTypeError(f"Input path is not a file: {path}")
         return p
 
     @classmethod
-    def input_dir(cls, path):
+    def input_dir(cls, path: str) -> pl.Path:
         p = pl.Path(path).resolve(strict=True)
         if not p.is_dir():
             raise argp.ArgumentTypeError(f"Input path is not a directory: {path}")
         return p
 
     @classmethod
-    def output_file(cls, path):
+    def output_file(cls, path: str) -> pl.Path:
         p = pl.Path(path).resolve(strict=False)
         if p.is_dir():
             raise argp.ArgumentTypeError(
@@ -30,14 +30,14 @@ class IOPath:
         return p
 
     @classmethod
-    def output_dir(cls, path):
+    def output_dir(cls, path: str) -> pl.Path:
         p = pl.Path(path).resolve(strict=False)
         if p.is_file():
             raise argp.ArgumentTypeError(f"Output path points to existing file: {path}")
         return p
 
     @classmethod
-    def output_prefix(cls, path):
+    def output_prefix(cls, path: str) -> pl.Path:
         p = pl.Path(path.strip(".")).resolve(strict=False)
         if p.is_dir():
             err_msg = (

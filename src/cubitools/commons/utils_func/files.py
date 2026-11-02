@@ -1,10 +1,11 @@
 import itertools as itt
+import pathlib as pl
 import typing as typ
 
 from cubitools.commons.utils_cls.file import File
 
 
-def get_files_iter(files: dict[str, list[File]]) -> typ.Iterable[File]:
+def get_files_iter(files: dict[pl.Path, list[File]]) -> typ.Iterable[File]:
     """Convenience wrapper to iterate over all files
     [type File] when nested as a dict of lists.
 
@@ -13,7 +14,7 @@ def get_files_iter(files: dict[str, list[File]]) -> typ.Iterable[File]:
     type does not change.
 
     Args:
-        collected_files (dict[str, list[File]]): _description_
+        collected_files (dict[pl.Path, list[File]]): _description_
 
     Returns:
         _type_: _description_

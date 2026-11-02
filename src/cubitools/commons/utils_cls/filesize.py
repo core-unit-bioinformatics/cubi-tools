@@ -1,4 +1,3 @@
-import collections as col
 import math
 import re
 import sys
@@ -6,15 +5,17 @@ import typing
 
 from cubitools.commons.enums import FileSizeUnit
 
-FileSizeStats = col.namedtuple(
-    "FileSizeStats", field_names=["total_files", "total_size", "min_size", "max_size"]
-)
-
 
 class FileSize:
     __slots__ = ["size", "b", "kb", "mb", "gb", "tb"]
+    size: int
+    b: float
+    kb: float
+    mb: float
+    gb: float
+    tb: float
 
-    def __init__(self, file_size):
+    def __init__(self, file_size: "str | int | float | FileSize") -> None:
         if isinstance(file_size, str):
             if file_size == "-1":
                 self.size = sys.maxsize
@@ -43,10 +44,10 @@ class FileSize:
             setattr(self, fsu.name, size_unit)
         return None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.size}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.size}"
 
     # in the following: adding 'object' just to silence
@@ -171,15 +172,22 @@ class FileSize:
         size_in_byte = self._number_to_byte(number, power)
         return size_in_byte
 
-    def _number_to_byte(self, file_size, power):
+    def _number_to_byte(self, file_size: float, power: int) -> int:
         size_in_byte = file_size * math.pow(1024, power)
         size_in_byte = int(round(size_in_byte, 0))
         return size_in_byte
 
-    def _to_unit(self, power):
+    def _to_unit(self, power: int) -> float:
         size_in_unit = self.size / math.pow(1024, power)
         if size_in_unit < 1:
             size_in_unit = round(size_in_unit, 3)
         else:
             size_in_unit = round(size_in_unit, 1)
         return size_in_unit
+
+
+class FileSizeStats(typing.NamedTuple):
+    total_files: int
+    total_size: FileSize
+    min_size: FileSize
+    max_size: FileSize

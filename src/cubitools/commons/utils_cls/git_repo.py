@@ -2,6 +2,12 @@ import pathlib as pl
 import urllib.parse as urlp
 
 from cubitools.commons.enums import GitAuth
+from cubitools.commons.utils_cls.git_config import (
+    GitConfigAccountOrg,
+    GitConfigAccountUser,
+    GitConfigPreset,
+    GitConfigRemote,
+)
 from cubitools.commons.utils_cls.logging import MOCK_LOGGER, CubiToolsLogger, MockLogger
 from cubitools.commons.utils_cls.syscall import SysCallInterface
 
@@ -10,10 +16,10 @@ class GitRepository:
     def __init__(
         self,
         repo_uri: pl.Path | str,
-        git_preset,
+        git_preset: GitConfigPreset,
         dry_run: bool,
         logger: CubiToolsLogger | MockLogger = MOCK_LOGGER,
-    ):
+    ) -> None:
         self.logger = logger
 
         if isinstance(repo_uri, str):
@@ -24,8 +30,10 @@ class GitRepository:
             self.repo_name = repo_name
             # namespace = just exist on GitLab,
             # see _parse_git_remote_url
-            self.server_namespaces = {server: namespaces}
-            self.remote_source = repo_uri
+            self.server_namespaces: dict[str | None, list[str]] | None = {
+                server: namespaces
+            }
+            self.remote_source: str | None = repo_uri
         elif isinstance(repo_uri, pl.Path):
             self.local_path = repo_uri
             self.repo_name = self.local_path.name
@@ -58,6 +66,7 @@ class GitRepository:
         self.user_email = git_preset.local_user.email
         if self.is_git_repo:
             try:
+                self.active_remotes: dict[str, str] | None
                 self.active_remotes, self.server_namespaces = self._parse_remotes()
             except Exception:
                 # this should be more specific - subprocess.CalledProcessError
@@ -68,7 +77,9 @@ class GitRepository:
             self.server_namespaces = None
         return None
 
-    def _parse_git_remote_url(self, remote_url):
+    def _parse_git_remote_url(
+        self, remote_url: str
+    ) -> tuple[str | None, str, list[str], str]:
         """_parse_git_remote_url _summary_
 
         Args:
@@ -109,7 +120,11 @@ class GitRepository:
 
         return server, handle, namespaces, repo_name
 
-    def _build_git_remote_url(self, remote, account):
+    def _build_git_remote_url(
+        self,
+        remote: GitConfigRemote,
+        account: GitConfigAccountUser | GitConfigAccountOrg,
+    ) -> str:
         """_build_git_remote_url _summary_
 
         Args:
@@ -127,7 +142,7 @@ class GitRepository:
             remote_url = f"git@{srv}:{hdl}/{self.repo_name}.git"
         return remote_url
 
-    def _set_user_config(self):
+    def _set_user_config(self) -> None:
         """_set_user_config _summary_"""
         self.logger.debug(f"Setting git user config: {self.local_path}")
         self.git_exec.run(["config", "user.name", f'"{self.user_name}"'])
@@ -137,7 +152,7 @@ class GitRepository:
         self.logger.debug(f"Setting git user config - done")
         return None
 
-    def _remove_remote(self, remote_name):
+    def _remove_remote(self, remote_name: str) -> None:
         """_remove_remote _summary_
 
         Args:
@@ -147,7 +162,7 @@ class GitRepository:
         self.git_exec.run(["remote", "remove", remote_name])
         return None
 
-    def _parse_remotes(self):
+    def _parse_remotes(self) -> tuple[dict[str, str], dict[str | None, list[str]]]:
         """_parse_remotes"""
         # this only reads, hence 'force_exec'
         out, _ = self.git_exec.run(["remote", "-v"], force_exec=True)
@@ -174,7 +189,7 @@ class GitRepository:
             active_remotes[remote_name] = remote_url
         return active_remotes, server_namespaces
 
-    def _set_remotes(self):
+    def _set_remotes(self) -> None:
         """_set_remotes"""
         self.logger.debug(f"Setting remotes for repo: {self.local_path}")
 
@@ -241,7 +256,12 @@ class GitRepository:
             self._set_all_target(high_prio_remote[0], high_prio_remote[1], set_remotes)
         return None
 
-    def _set_all_target(self, prio_remote, prio_remote_url, remote_urls):
+    def _set_all_target(
+        self,
+        prio_remote: GitConfigRemote,
+        prio_remote_url: str,
+        remote_urls: dict[str, str],
+    ) -> None:
         """_set_all_target _summary_
 
         Args:
@@ -264,7 +284,7 @@ class GitRepository:
         self.remote_source = prio_remote_url
         return None
 
-    def init_repo(self):
+    def init_repo(self) -> None:
         """init_repo"""
         self.logger.debug(f"Initializing new repo: {self.local_path}")
         try:
@@ -288,7 +308,7 @@ class GitRepository:
         self.logger.debug(f"Initializing new repo - done")
         return None
 
-    def norm_repo(self):
+    def norm_repo(self) -> None:
         """norm_repo _summary_"""
         if not self.is_git_repo:
             err_msg = (
@@ -304,7 +324,7 @@ class GitRepository:
         self.logger.debug("Normalizing existing repo - done")
         return None
 
-    def set_user(self):
+    def set_user(self) -> None:
         """set_user _summary_"""
         if not self.is_git_repo:
             err_msg = (
@@ -317,7 +337,7 @@ class GitRepository:
         self.logger.debug("Setting user config for existing repo - done")
         return None
 
-    def clone_repo(self):
+    def clone_repo(self) -> None:
         """clone_repo _summary_"""
         self.logger.debug(f"Cloning new repo into: {self.local_path}")
         if self.is_git_repo:

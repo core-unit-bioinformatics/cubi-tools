@@ -4,6 +4,7 @@ import logging
 import os
 import pathlib as pl
 import socket
+import typing as typ
 
 import tomlkit
 
@@ -61,12 +62,12 @@ class CubiToolsEnv:
 class CubiToolsEnvBuilder:
     __slots__ = ["user_home", "logger"]
 
-    def __init__(self, logger):
+    def __init__(self, logger: logging.Logger) -> None:
         self.user_home = pl.Path.home().resolve(strict=True)
         self.logger = logger
         return None
 
-    def build_environment(self):
+    def build_environment(self) -> CubiToolsEnv:
         os_env = dict(os.environ)
         custom_env, loaded_env = self._check_custom_env(os_env)
         if custom_env is not None:
@@ -101,12 +102,14 @@ class CubiToolsEnvBuilder:
         self._dump_env_file(ct_env)
         return ct_env
 
-    def _check_custom_env(self, os_env):
+    def _check_custom_env(
+        self, os_env: dict[str, str]
+    ) -> tuple[pl.Path | None, dict[str, typ.Any]]:
         try:
             custom_env = pl.Path(os_env[CT_CONST.cubi_tools_env]).resolve(strict=True)
         except (KeyError, FileNotFoundError):
             custom_env = None
-            loaded_env = dict()
+            loaded_env: dict[str, typ.Any] = dict()
         else:
             _file_enc = CT_CONST.default_text_encoding
             with open(custom_env, "r", encoding=_file_enc) as cfg_dump:
@@ -121,20 +124,22 @@ class CubiToolsEnvBuilder:
                     loaded_env[key] = value
         return custom_env, loaded_env
 
-    def _dump_env_file(self, ct_env):
+    def _dump_env_file(self, ct_env: CubiToolsEnv) -> None:
         simple_env = dict((k, str(v)) for k, v in dcl.asdict(ct_env).items())
         _file_enc = CT_CONST.default_text_encoding
         with open(ct_env.env_file, "w", encoding=_file_enc) as env_dump:
             tomlkit.dump(simple_env, env_dump)
         return
 
-    def _collect_user_info(self, ct_env):
+    def _collect_user_info(self, ct_env: dict[str, typ.Any]) -> None:
         ct_env["user_name"] = getpass.getuser()
         ct_env["user_home"] = self.user_home
         ct_env["host_name"] = socket.gethostname()
         return
 
-    def _set_env_dir(self, os_env, env_key, dir_default):
+    def _set_env_dir(
+        self, os_env: dict[str, str], env_key: str, dir_default: str
+    ) -> pl.Path:
         try:
             system_dir = pl.Path(os_env[env_key])
         except KeyError:

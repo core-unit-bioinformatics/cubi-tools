@@ -15,7 +15,7 @@ CLEANUP_FILES = []
 LOGGER_NAME = "main"
 
 
-def setup_cli_parser():
+def setup_cli_parser() -> argp.ArgumentParser:
     parser = argp.ArgumentParser(
         prog=__prog__,
         usage=__usage__,
@@ -84,7 +84,7 @@ def setup_cli_parser():
     return parser
 
 
-def final_cleanup():
+def final_cleanup() -> None:
     for fpath in CLEANUP_FILES:
         try:
             os.remove(fpath)
@@ -93,7 +93,7 @@ def final_cleanup():
     return None
 
 
-def run_app():
+def run_app() -> int:
     main_parser = setup_cli_parser()
     try:
         args = main_parser.parse_args()
