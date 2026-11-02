@@ -9,8 +9,6 @@ import cubitools.cli.subparsers as subcmd
 from cubitools import __cubitools__, __prog__, __usage__, __version__
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
 
-CLEANUP_FILES = []
-
 
 LOGGER_NAME = "main"
 
