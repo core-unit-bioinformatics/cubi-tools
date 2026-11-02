@@ -177,3 +177,93 @@ class CubiToolsLogger:
         log_lines = " /// ".join(log_lines) + "\n"
         self._system(log_lines, logging.CRITICAL)
         return None
+
+
+class MockLogger:
+    """Stand-in for a CubiToolsLogger that silently discards
+    all logging events. Use as default for objects that may be
+    created before a CubiToolsLogger is available, which avoids
+    'if self.logger is not None' checks.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the mock logger; the name mimics the
+        'name' attribute of a CubiToolsLogger.
+        """
+        self.name = "mock"
+        self.err_msg_query_user = (
+            "The MockLogger cannot query the user for input. This is "
+            "a bug. Pass a CubiToolsLogger to the calling object."
+        )
+        return None
+
+    def set_debug_logging(self, debug: bool) -> None:
+        """Discard the request to activate debug logging.
+
+        Args:
+            debug (bool): ignored
+        """
+        return None
+
+    def tell_user(self, msg: str) -> None:
+        """Discard the message for the user.
+
+        Args:
+            msg (str): ignored
+        """
+        return None
+
+    def query_user(self, msg: str) -> str:
+        """Querying the user cannot be mocked because the caller
+        expects an answer, which the MockLogger cannot provide.
+
+        Args:
+            msg (str): question for the user
+
+        Raises:
+            RuntimeError: always
+        """
+        raise RuntimeError(f"{self.err_msg_query_user} Query: {msg}")
+
+    def debug(self, msg: str) -> None:
+        """Discard the debug-level message.
+
+        Args:
+            msg (str): ignored
+        """
+        return None
+
+    def info(self, msg: str) -> None:
+        """Discard the info-level message.
+
+        Args:
+            msg (str): ignored
+        """
+        return None
+
+    def warning(self, msg: str) -> None:
+        """Discard the warning-level message.
+
+        Args:
+            msg (str): ignored
+        """
+        return None
+
+    def error(self, msg: str) -> None:
+        """Discard the error-level message.
+
+        Args:
+            msg (str): ignored
+        """
+        return None
+
+    def critical(self) -> None:
+        """Discard the traceback of the exception
+        currently being handled.
+        """
+        return None
+
+
+# Stateless, hence safe to share as default argument
+MOCK_LOGGER = MockLogger()
+
