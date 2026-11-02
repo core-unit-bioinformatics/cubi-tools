@@ -21,18 +21,6 @@ instructions to install the CUBI Tools inside a dedicated Conda environment.
 3. Install the CUBI tools:
     - `pip install --editable .`
 
-### Formatting Python code with Ruff
-
-Ruff is part of the `cubi-tools-dev` environment and reads its settings from the
-`[tool.ruff]` sections in `pyproject.toml`. Run the following commands from the
-repository root directory:
-
-1. Sort the imports (`ruff format` does not sort imports):
-    - `ruff check --select I --fix src/`
-2. Format the source code:
-    - `ruff format src/`
-3. Optional: check whether all files are formatted without changing them:
-    - `ruff format --check src/`
 
 ## For users
 
@@ -45,7 +33,7 @@ repository root directory:
     - `pip install .`
 
 
-### Alternative: build the container
+## Alternative: build the container
 
 ```bash
 # check out repository as above
@@ -82,6 +70,44 @@ $ cubitools git --init workflow-smk-foobar --init-preset qb-all
 $ ct-upd-md --target-dir workflow-smk-foobar/ --git-branch v1.8.0
 $ ct-upd-wf --workflow-target workflow-smk-foobar/ --branch v1.6.0
 ```
+
+# Developer info for the CUBI Tools package
+
+All tool configurations for code formatting, linting, type checking
+and so on are part of the `pyproject.toml`. Apply the following process
+when adding changing or adding code:
+
+## Formatting Python code with Ruff
+
+Ruff is part of the `cubi-tools-dev` environment and reads its settings from the
+`[tool.ruff]` sections in `pyproject.toml`. Run the following commands from the
+repository root directory:
+
+1. Sort the imports (`ruff format` does not sort imports):
+    - `ruff check --select I --fix src/`
+2. Format the source code:
+    - `ruff format src/`
+3. Optional: check whether all files are formatted without changing them:
+    - `ruff format --check src/`
+
+## Linting Python code with Ruff and Pylint
+
+Ruff and Pylint are part of the `cubi-tools-dev` environment and read their settings
+from the `[tool.ruff.lint]` and `[tool.pylint.*]` sections in `pyproject.toml`.
+Ruff performs the regular linting; Pylint is limited to the two checks that Ruff does
+not cover: duplicate code and circular imports. Run the following commands from the
+repository root directory:
+
+1. Lint the source code with Ruff:
+    - `ruff check src/`
+2. Optional: let Ruff fix the findings that can be fixed automatically
+(findings of the `B` rules always need to be fixed manually):
+    - `ruff check --fix src/`
+3. Check for duplicate code and circular imports with Pylint. Pylint must
+analyze the whole package in one run to detect these, so do not run it on
+single files:
+    - `pylint src/cubitools/`
+
 
 # Citation
 

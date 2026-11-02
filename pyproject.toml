@@ -55,17 +55,16 @@ cubitools = [
 pid = "https://github.com/core-unit-bioinformatics/template-metadata-files"
 version = "1.7.0"
 
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
-[tool.pylint.format]
-max-line-length = "88"
-
 [tool.pylint.messages_control]
-disable = [ "logging-fstring-interpolation", "useless-return", "missing-module-docstring",]
+disable = ["all"]
+enable = ["duplicate-code", "cyclic-import"]
+
+[tool.pylint.similarities]
+min-similarity-lines = 6
+ignore-comments = true
+ignore-docstrings = true
+ignore-imports = true
+ignore-signatures = true
 
 [tool.ruff]
 line-length = 88
@@ -82,3 +81,13 @@ skip-magic-trailing-comma = false
 select = ["E", "F", "B", "I"]
 ignore = []
 unfixable = ["B"]
+
+# below: deprecated, use Ruff;
+# kept for compatibility
+[tool.black]
+line-length = 88
+
+# below: deprecated, use Ruff;
+# kept for compatibility
+[tool.isort]
+profile = "black"
