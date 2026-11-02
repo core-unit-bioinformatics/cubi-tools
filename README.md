@@ -21,6 +21,19 @@ instructions to install the CUBI Tools inside a dedicated Conda environment.
 3. Install the CUBI tools:
     - `pip install --editable .`
 
+### Formatting Python code with Ruff
+
+Ruff is part of the `cubi-tools-dev` environment and reads its settings from the
+`[tool.ruff]` sections in `pyproject.toml`. Run the following commands from the
+repository root directory:
+
+1. Sort the imports (`ruff format` does not sort imports):
+    - `ruff check --select I --fix src/`
+2. Format the source code:
+    - `ruff format src/`
+3. Optional: check whether all files are formatted without changing them:
+    - `ruff format --check src/`
+
 ## For users
 
 0. Clone the repository and change into the repository root directory.
