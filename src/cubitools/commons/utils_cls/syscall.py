@@ -8,11 +8,15 @@ import semver
 
 from cubitools.commons.constants import CUBITOOLS_CONSTANTS as CT_CONST
 from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
+from cubitools.commons.utils_cls.logging import MOCK_LOGGER, CubiToolsLogger, MockLogger
 
 
 class SysCallInterface:
 
-    def __init__(self, working_dir=None, executable=None, dry_run=False, logger=None):
+    def __init__(
+        self, working_dir=None, executable=None, dry_run=False,
+        logger: CubiToolsLogger | MockLogger = MOCK_LOGGER
+    ):
 
         self._compute_object_id()
         self.logger = logger
@@ -24,12 +28,11 @@ class SysCallInterface:
         self.exec_version = "unknown"
         if executable is not None:
             self.set_exec(executable)
-        if self.logger is not None:
-            self.logger.debug(f"SysCallInterface {self._id} init w/ wd: {self.wd}")
-            self.logger.debug(
-                f"SyscallInterface {self._id} init w/ exec: {self.exec} "
-                f"v{self.exec_version}"
-            )
+        self.logger.debug(f"SysCallInterface {self._id} init w/ wd: {self.wd}")
+        self.logger.debug(
+            f"SyscallInterface {self._id} init w/ exec: {self.exec} "
+            f"v{self.exec_version}"
+        )
         return None
 
     def _compute_object_id(self) -> None:
@@ -64,8 +67,6 @@ class SysCallInterface:
 
     def _present_dry_run_info(self, command: list[str]) -> None:
 
-        if self.logger is None:
-            return None
         cmd_str = " ".join(command)
         self.logger.tell_user(f"=== SysCallInterface {self._id} DRY RUN info ===")
         #self.logger.tell_user(f"Current $PATH: {CT_ENV.path}")
@@ -101,13 +102,12 @@ class SysCallInterface:
                     capture_output=True, encoding=CT_CONST.default_text_encoding
                 )
             except sp.CalledProcessError as cperr:
-                if self.logger is not None:
-                    msg = f"Command failed - exit {cperr.returncode}: {cperr.cmd}"
-                    self.logger.error(msg)
-                    err_msg = cperr.stderr.strip().split()
-                    err_msg = " /// ".join(err_msg)
-                    msg = f"Returned stderr: {err_msg}"
-                    self.logger.error(msg)
+                msg = f"Command failed - exit {cperr.returncode}: {cperr.cmd}"
+                self.logger.error(msg)
+                err_msg = cperr.stderr.strip().split()
+                err_msg = " /// ".join(err_msg)
+                msg = f"Returned stderr: {err_msg}"
+                self.logger.error(msg)
                 # in this context, it cannot be determined
                 # if the error was a probable outcome or not,
                 # so handling needs to happen in the calling context
@@ -131,8 +131,7 @@ class SysCallInterface:
                 f"Working directory path is not a directory: {working_dir}"
             )
         self.wd = wd_path
-        if self.logger is not None:
-            self.logger.debug(f"SysCallInterface {self._id} wd changed to: {self.wd}")
+        self.logger.debug(f"SysCallInterface {self._id} wd changed to: {self.wd}")
         return None
 
     def set_exec(self, executable: str) -> None:
@@ -152,9 +151,8 @@ class SysCallInterface:
             raise RuntimeError(err_msg)
         self.exec = exec_path
         self._set_exec_version()
-        if self.logger is not None:
-            self.logger.debug(
-                f"SysCallInterface {self._id} exec set to: {self.exec} "
-                f"v{self.exec_version}"
-            )
+        self.logger.debug(
+            f"SysCallInterface {self._id} exec set to: {self.exec} "
+            f"v{self.exec_version}"
+        )
         return None
