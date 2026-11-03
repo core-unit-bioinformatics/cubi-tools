@@ -18,7 +18,6 @@ from cubitools.commons.enums import (
     PathComponent,
     PathType,
 )
-from cubitools.commons.env import CUBITOOLS_ENVIRONMENT as CT_ENV
 from cubitools.commons.utils_cls.file import File
 from cubitools.commons.utils_cls.filecollector import FileCollector
 from cubitools.commons.utils_cls.filesize import FileSize
@@ -96,6 +95,8 @@ def get_subcommand_parser(
     )
 
     checksum_members = list(Checksum.__members__)
+    default_checksum_names = ", ".join([chk.name for chk in checksum_members])
+    default_checksums = f"{default_checksum_names}"
     parser.add_argument(
         "--checksums",
         "-chk",
@@ -104,7 +105,7 @@ def get_subcommand_parser(
         choices=checksum_members,
         default=[Checksum.md5.name, Checksum.sha256.name],
         dest="checksums",
-        help=f"Select checksum(s) to compute. Default: {Checksum.md5.name, Checksum.sha256.name}",
+        help=f"Select checksum(s) to compute. Default: {default_checksums}",
     )
 
     parser.add_argument(
@@ -145,9 +146,11 @@ def get_subcommand_parser(
         dest="manifest",
         help=(
             "Select the type of the file manifest to be created: "
-            "(1) complete: list relative file path, size and all computed checksums "
-            "(2) minimal: list only file name, size and shortest checksum available (typically, that is md5) "
-            "(3) coreutils: list relative file path and checksum (format is compatible to GNU coreutils md5sum, sha1sum etc.) "
+            "(1) complete: list relative file path, size and all computed checksums. "
+            "(2) minimal: list only file name, size and shortest checksum available, "
+            "which typically is md5. "
+            "(3) coreutils: list relative file path and checksum, in that order, "
+            "to be compliant with the GNU coreutils such as md5sum or sha1sum. "
             "(4) skip: do not create a file manifest (discouraged). "
             f"Default: {FileManifestType.complete.name}"
         ),
@@ -159,7 +162,10 @@ def get_subcommand_parser(
         action="store_true",
         default=False,
         dest="manifest_only",
-        help="Only create the file manifest(s) and skip creating the tar archive(s). Default: False",
+        help=(
+            "Only create the file manifest(s) and do not create the tar archive(s). "
+            "Default: False"
+        ),
     )
 
     parser.add_argument(
@@ -254,6 +260,7 @@ def collect_file_paths(
             for fobj, reason in skipped_files:
                 LOGGER.warning(f"Skipped file: {fobj.abs_path} --- reason: {reason}")
         stats = file_collector.get_last_stats()
+        assert stats is not None, f"No-exec for FileCollector for dir: {arch_dir}"
         size_per_dir[arch_dir] = stats.total_size
         LOGGER.debug(f"Files collected: {stats.total_files}")
         LOGGER.debug(f"Total file size: {stats.total_size.mb} mb")
@@ -303,7 +310,8 @@ def group_files_in_batches(
             f"(size: {arch_dir_size} b / {len(arch_files)} files)"
         )
         if arch_dir_size < chunk_limit:
-            active_limit = chunk_limit
+            # for type consistency / mypy
+            active_limit = chunk_limit.size
         else:
             split_equal = math.ceil(arch_dir_size / chunk_limit)
             _fudge_factor = 1.1
@@ -313,7 +321,7 @@ def group_files_in_batches(
             # sizes per batch. Slightly increasing the active limit
             # leads to a more balanced distribution of files per batch.
             active_limit = min(
-                chunk_limit, math.ceil(arch_dir_size / split_equal * _fudge_factor)
+                chunk_limit.size, math.ceil(arch_dir_size / split_equal * _fudge_factor)
             )
         LOGGER.debug(f"Batch size limit: {active_limit}")
         for arch_file in arch_files:
@@ -523,7 +531,9 @@ def perform_cleanup(files_to_delete, remove_dirs: pl.Path | None = None) -> None
                 continue
             try:
                 os.rmdir(directory)
-            except (IOError, OSError) as exc:
+            except (IOError, OSError):
+                # TODO: decide what to do here
+                # just log a warning?
                 continue
     return
 
@@ -618,7 +628,8 @@ def archive_folders(
         mp.Process(target=archive_worker, args=(sendq, recvq)) for _ in range(args.jobs)
     ]
     LOGGER.debug(f"Initialized {len(workers)} worker processes")
-    [p.start() for p in workers]
+    for p in workers:
+        p.start()
 
     batch_total = len(file_batches)
     for (sub_folder, batch_num, _), arch_files in file_batches.items():
@@ -718,7 +729,8 @@ def exec_arch_module(args: argp.Namespace) -> int:
                 "only one checksum for this manifest type."
             )
             raise ValueError(
-                f"Coreutils-style manifest requires exactly one checksum to be computed: {required_checksums}"
+                "Coreutils-style manifest works only with exactly one checksum. "
+                f"You requested: {len(required_checksums)} / {required_checksums}"
             )
         if args.no_manifest_header:
             pass
@@ -728,7 +740,7 @@ def exec_arch_module(args: argp.Namespace) -> int:
                 "a header row by construction. The '--no-manifest-header' option "
                 "will be set to 'True' automatically."
             )
-            setattr(args, "no_manifest_header", True)
+            args.no_manifest_header = True
 
     # important to check for feasible chunk limit before
     # the checksum computation (potentially) starts
@@ -748,7 +760,7 @@ def exec_arch_module(args: argp.Namespace) -> int:
         )
 
     file_batches = group_files_in_batches(collected_files, chunk_limit, size_per_dir)
-    _ = archive_folders(file_batches, args)
+    archive_folders(file_batches, args)
 
     return 0
 
