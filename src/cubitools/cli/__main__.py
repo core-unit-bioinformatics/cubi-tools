@@ -10,6 +10,12 @@ from cubitools import __cubitools__, __prog__, __usage__, __version__
 from cubitools.commons.utils_cls.logging import CubiToolsLogger
 
 
+# this is not populated at the moment and
+# kept as an additonal reminder to implement
+# a proper cleanup registry. See gh#66
+CLEANUP_FILES: list[str] = []
+
+
 LOGGER_NAME = "main"
 
 
