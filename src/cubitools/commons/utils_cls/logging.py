@@ -171,8 +171,8 @@ class CubiToolsLogger:
                 continue
             line_num += 1
             log_lines.append(f"[trbL:{line_num}] {line.strip()}")
-        log_lines = " /// ".join(log_lines) + "\n"
-        self._system(log_lines, logging.CRITICAL)
+        log_lines_concat = " /// ".join(log_lines) + "\n"
+        self._system(log_lines_concat, logging.CRITICAL)
         return None
 
 
