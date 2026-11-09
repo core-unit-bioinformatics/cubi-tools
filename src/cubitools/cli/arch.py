@@ -95,7 +95,7 @@ def get_subcommand_parser(
     )
 
     checksum_members = list(Checksum.__members__)
-    default_checksum_names = ", ".join([chk.name for chk in checksum_members])
+    default_checksum_names = ", ".join([chk for chk in checksum_members])
     default_checksums = f"{default_checksum_names}"
     parser.add_argument(
         "--checksums",
